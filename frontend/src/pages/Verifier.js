@@ -186,12 +186,21 @@ const Verifier = () => {
 
   const loadResults = async (jobId) => {
     try {
-      const response = await resultsApi.get(jobId, 0, 100);
+      const status = statusFilter !== 'all' ? statusFilter : null;
+      const provider = providerFilter !== 'all' ? providerFilter : null;
+      const response = await resultsApi.get(jobId, 0, 100, status, provider);
       setResults(response.data.results);
     } catch (error) {
       console.error('Failed to load results:', error);
     }
   };
+
+  // Reload results when filters change
+  useEffect(() => {
+    if (currentJob) {
+      loadResults(currentJob);
+    }
+  }, [statusFilter, providerFilter]);
 
   const exportResults = async (format = 'csv') => {
     if (!currentJob) {
