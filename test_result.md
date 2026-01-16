@@ -253,7 +253,7 @@ frontend:
     file: "pages/Verifier.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "partial"
         agent: "main"
@@ -261,6 +261,9 @@ frontend:
       - working: true
         agent: "main"
         comment: "Enhanced with CSV validation, format instructions, sample CSV download, tooltips, success rate indicator, improved error display, pagination, and comprehensive loading states"
+      - working: true
+        agent: "main"
+        comment: "FIXED: Added job history section to view and download results from previous jobs. Implemented job polling for reliable progress updates. Users can now access all previous verification jobs with View Results button."
 
   - task: "Single Email Finder UI"
     implemented: true
