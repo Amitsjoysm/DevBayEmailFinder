@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Slider } from '../components/ui/slider';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Upload, Mail, Play, Pause, Square, Download, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw, Filter, FileText, HelpCircle, Info, Clock, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Upload, Mail, Play, Pause, Square, Download, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw, Filter, FileText, HelpCircle, Info, Clock, TrendingUp, ChevronLeft, ChevronRight, History, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import Layout from '../components/Layout';
@@ -43,6 +43,11 @@ const Verifier = () => {
   const [showInstructions, setShowInstructions] = useState(false);
   const [csvValidationError, setCsvValidationError] = useState(null);
   const [loadingResults, setLoadingResults] = useState(false);
+  
+  // Job history states
+  const [jobHistory, setJobHistory] = useState([]);
+  const [showJobHistory, setShowJobHistory] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     const socket = getSocket();
