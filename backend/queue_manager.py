@@ -6,6 +6,7 @@ import time
 from models import VerificationJob, VerificationResult, JobStatus, VerificationStatus, FinderResult
 from email_verifier import EmailVerifier
 from email_finder import EmailFinder
+from ledger_service import LedgerService
 import random
 import logging
 
@@ -17,6 +18,7 @@ class VerificationQueue:
         self.socketio = socketio
         self.verifier = EmailVerifier()
         self.finder = EmailFinder()
+        self.ledger = LedgerService(db)
         self.active_jobs = {}  # job_id -> job_state
         self.proxies = []
         self.current_proxy_index = 0
