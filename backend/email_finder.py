@@ -131,7 +131,7 @@ class EmailFinder:
                     })
                     continue
             
-            return {
+            result = {
                 'found': found_email is not None,
                 'email': found_email,
                 'first_name': first_name,
@@ -141,8 +141,13 @@ class EmailFinder:
                 'all_results': results,
                 'search_time': time.time() - start_time,
                 'error_message': None,
-                'deliverability_score': 0  # Will be calculated after return
+                'deliverability_score': 0
             }
+            
+            # Calculate deliverability score
+            result['deliverability_score'] = self.calculate_finder_score(result)
+            
+            return result
         except Exception as e:
             return {
                 'found': False,
