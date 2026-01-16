@@ -55,6 +55,7 @@ const Verifier = () => {
 
   const handleJobProgress = (data) => {
     setJobProgress(data);
+    setJobStatus(data.status);
   };
 
   const handleVerificationResult = (result) => {
