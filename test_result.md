@@ -394,6 +394,42 @@ frontend:
         agent: "main"
         comment: "Added deliverability score column to results tables in both Verifier and Finder pages. Color-coded badges: 🟢 80-100 (Excellent/Green), 🟡 60-79 (Good/Lime), 🟠 40-59 (Fair/Yellow), 🔴 0-39 (Poor/Red). Tooltip shows score value and rating. Score automatically included in CSV/JSON exports. Chronological order maintained as requested."
 
+  - task: "Unified Email Ledger System"
+    implemented: true
+    working: true
+    file: "ledger_service.py, queue_manager.py, server.py, models.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Created unified email ledger with smart caching. EmailLedger model stores all verification/finder results with email as unique key. Implements 30-day freshness check. Integrated into verification and finder workflows - checks ledger before processing, returns cached results instantly. Added 3 API endpoints: GET /api/ledger/stats, GET /api/ledger/search, GET /api/ledger/{email}. Tracks verification_count, first_verified_at, last_verified_at per email. Significantly reduces redundant processing and API costs."
+
+  - task: "Finder Pattern Order Fix"
+    implemented: true
+    working: true
+    file: "email_finder.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "CRITICAL FIX: Fixed pattern caching bug that caused incorrect email matching. Previously, cached patterns would override proper pattern order, causing finder to return wrong person's email (e.g., john@domain.com instead of john.doe@domain.com). Updated generate_email_variants() to ALWAYS check patterns in priority order: first.last@domain FIRST, then other patterns. Cached pattern is prioritized but never excludes other patterns. Ensures correct person is found even with duplicate first names at same domain."
+
+  - task: "Live Counter with Processing Rate"
+    implemented: true
+    working: true
+    file: "queue_manager.py, Verifier.js, Finder.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Enhanced progress tracking with live counter. Backend now emits current_email being processed and processing_rate (emails/sec) via socket.io. Updated progress broadcast frequency to every 5 records for more responsive updates. Frontend displays prominent live counter showing 'Currently Checking: email@domain.com' with animated pulse effect and processing rate. Applied to both Verifier and Finder pages. Provides real-time visibility into job processing."
+
 metadata:
   created_by: "main_agent"
   version: "1.0"
