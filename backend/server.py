@@ -279,6 +279,7 @@ async def find_single_email(
 async def upload_finder_csv(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    threads: int = 10,
     current_user: dict = Depends(get_current_user)
 ):
     # Read CSV
@@ -301,18 +302,35 @@ async def upload_finder_csv(
     if not records:
         raise HTTPException(status_code=400, detail="No valid records found in CSV")
     
+    # Get user settings
+    settings_dict = await db.user_settings.find_one({"user_id": current_user['id']}, {"_id": 0})
+    if not settings_dict:
+        settings_dict = UserSettings(user_id=current_user['id']).model_dump()
+    
+    settings_dict['threads'] = threads
+    
     # Create job
     job = VerificationJob(
         user_id=current_user['id'],
         job_type="finder",
         status=JobStatus.QUEUED,
-        total_records=len(records)
+        total_records=len(records),
+        settings=settings_dict
     )
     
     job_dict = job.model_dump()
     job_dict['created_at'] = job_dict['created_at'].isoformat()
     
     await db.verification_jobs.insert_one(job_dict)
+    
+    # Start processing in background
+    background_tasks.add_task(
+        queue_manager.start_finder_job,
+        job.id,
+        current_user['id'],
+        records,
+        settings_dict
+    )
     
     return {"job_id": job.id, "status": "queued", "total_records": len(records)}
 
