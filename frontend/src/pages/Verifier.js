@@ -306,6 +306,7 @@ const Verifier = () => {
       const response = await verifyApi.upload(bulkFile, threads[0], delay[0]);
       setCurrentJob(response.data.job_id);
       toast.success(`Processing ${response.data.total_records} emails`);
+      loadJobHistory(); // Refresh job history
     } catch (error) {
       toast.error('Failed to start verification');
       setBulkProcessing(false);
