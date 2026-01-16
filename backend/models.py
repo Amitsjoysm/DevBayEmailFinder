@@ -111,6 +111,7 @@ class VerificationResult(BaseModel):
     last_retry_at: Optional[datetime] = None
     error_message: Optional[str] = None
     patterns_tested: Optional[int] = None
+    deliverability_score: int = 0  # 0-100 score
 
 class VerificationJob(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -175,6 +176,7 @@ class FinderResult(BaseModel):
     search_time: float = 0
     verified_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     error_message: Optional[str] = None
+    deliverability_score: int = 0  # 0-100 score
 
 # Proxy Models
 class ProxyCreate(BaseModel):
