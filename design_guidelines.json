@@ -1,0 +1,165 @@
+{
+  "identity": {
+    "name": "E1",
+    "archetype": "The Performance Pro",
+    "vibe": "Tactical, High-Density, Precision",
+    "core_principles": [
+      "Fusion over Imitation: Mix 'Developer Terminal' aesthetics with 'Executive Dashboard' clarity.",
+      "Density is Information: Don't waste space. Use compact grids.",
+      "Color is Signal: 90% Monochrome, 10% High-Voltage Signal Color.",
+      "Motion is Feedback: Animations should feel like mechanical switches, not floating clouds."
+    ]
+  },
+  "typography": {
+    "headings": {
+      "family": "Chivo, sans-serif",
+      "weights": ["700", "900"],
+      "usage": "Main page titles, Hero text, Section headers",
+      "letter_spacing": "tracking-tight"
+    },
+    "body": {
+      "family": "Inter, sans-serif",
+      "weights": ["400", "500"],
+      "usage": "General UI text, descriptions, form labels"
+    },
+    "mono": {
+      "family": "JetBrains Mono, monospace",
+      "weights": ["400"],
+      "usage": "Email addresses, API keys, Logs, Status codes, Data tables"
+    }
+  },
+  "colors": {
+    "theme_strategy": "Dual Theme (Dark Default)",
+    "palette": {
+      "primary": {
+        "name": "Electric Blue",
+        "hex": "#2563EB",
+        "tailwind": "bg-blue-600",
+        "usage": "Primary Actions, Active States, Brand Identity"
+      },
+      "background": {
+        "dark": "#09090B",
+        "light": "#FFFFFF",
+        "usage": "App background"
+      },
+      "surface": {
+        "dark": "#18181B",
+        "light": "#F4F4F5",
+        "usage": "Cards, Sidebar, Panels"
+      },
+      "border": {
+        "dark": "#27272A",
+        "light": "#E4E4E7",
+        "usage": "Grid lines, Component borders"
+      },
+      "signals": {
+        "success": "#22C55E",
+        "error": "#EF4444",
+        "warning": "#F59E0B",
+        "processing": "#3B82F6"
+      }
+    }
+  },
+  "visual_enhancers": {
+    "grid_borders": {
+      "description": "Visible 1px borders on all dashboard widgets to create a 'Control Panel' look.",
+      "css_classes": "border border-border/50"
+    },
+    "tracing_beam": {
+      "description": "Animated gradient border for the active 'Verification in Progress' card.",
+      "implementation": "Use a motion div with a moving gradient background behind a masked content div."
+    },
+    "glassmorphism": {
+      "description": "Used ONLY for sticky headers and floating controls.",
+      "css_classes": "bg-background/80 backdrop-blur-xl border-b border-border/50"
+    },
+    "scanlines": {
+      "description": "Subtle overlay for the 'Live Logs' or 'Terminal' section.",
+      "css_classes": "bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]"
+    }
+  },
+  "layout_strategy": {
+    "dashboard": {
+      "type": "Bento Grid Mode B (High Density)",
+      "grid_cols": "grid-cols-1 md:grid-cols-4",
+      "gap": "gap-4",
+      "rules": [
+        "Summary Metrics: col-span-1",
+        "Main Chart: col-span-2 or col-span-3",
+        "Live Feed: col-span-1 row-span-2 (Vertical list)",
+        "Every pixel must be utilized. Use h-full on children."
+      ]
+    },
+    "marketing": {
+      "type": "Bento Grid Mode A (Tetris)",
+      "grid_cols": "grid-cols-1 md:grid-cols-12",
+      "gap": "gap-8",
+      "rules": [
+        "Hero: col-span-full",
+        "Feature Highlight: col-span-6 or col-span-8",
+        "Stat/Detail: col-span-4",
+        "Asymmetry is key. Avoid perfect symmetry."
+      ]
+    }
+  },
+  "components": {
+    "buttons": {
+      "style": "Sharp or slightly rounded (rounded-md). No pill shapes for dashboard.",
+      "hover": "High contrast lift. hover:-translate-y-0.5 transition-transform"
+    },
+    "cards": {
+      "style": "Flat background, 1px subtle border, no shadow by default.",
+      "hover": "border-primary/50 transition-colors"
+    },
+    "inputs": {
+      "style": "Deep background (bg-secondary/50), clear border.",
+      "focus": "ring-1 ring-primary border-primary"
+    },
+    "tables": {
+      "style": "Dense. py-2 px-3 for cells. Monospace font for data columns.",
+      "header": "Uppercase, tracking-wider, text-xs, text-muted-foreground"
+    }
+  },
+  "image_urls": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1762279388956-1c098163a2a8?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "description": "Abstract neon lines forming a digital landscape. Use as a darkened background overlay for the Hero section.",
+      "category": "background"
+    },
+    "infrastructure_feature": {
+      "url": "https://images.unsplash.com/photo-1645477704075-cb3d14b349ee?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "description": "Futuristic server room with blue lights. Use for the 'Infrastructure/Speed' feature section.",
+      "category": "feature"
+    },
+    "team_presentation": {
+      "url": "https://images.unsplash.com/photo-1758691736097-7f735ac5f118?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "description": "Man presenting data on a large screen. Use for 'Analytics' feature or 'About Us'.",
+      "category": "content"
+    }
+  },
+  "icons": {
+    "library": "lucide-react",
+    "style": "Stroke width 1.5px (Thin/Technical look)",
+    "preferred_icons": [
+      "Activity", "Zap", "ShieldCheck", "Search", "Database", "Server", "Terminal", "BarChart3"
+    ]
+  },
+  "motion": {
+    "transitions": "transition-all duration-200 ease-out",
+    "page_load": "Fade in + Slide up (10px)",
+    "hover_effects": "Subtle lift (-2px) + Border glow"
+  },
+  "universal_guidelines": [
+    "DO NOT use 'Inter' for Headings. Use 'Chivo'.",
+    "DO NOT use gradients for text. Keep text solid for readability.",
+    "DO NOT use complete transparent backgrounds. Always use a blur or solid color.",
+    "ALL interactive elements MUST have a 'data-testid' attribute (kebab-case).",
+    "Use 'sonner' for toast notifications.",
+    "Use 'recharts' for data visualization (customized to match the theme).",
+    "Ensure all text has a contrast ratio of at least 4.5:1.",
+    "Mobile images must be constrained to max-h-[80vh].",
+    "Use 'lucide-react' for icons.",
+    "Files are .js/.jsx, NOT .ts/.tsx. Adjust imports accordingly."
+  ],
+  "instructions_to_main_agent": "You are building a high-performance tool. The UI should feel like a cockpit. Prioritize data density and clarity over decorative fluff. Use the 'Bento Grid' layouts defined above. Implement the 'Tracing Beam' effect for the active verification card to give visual feedback of the process. Ensure the Dark/Light toggle works seamlessly by using Tailwind's 'dark:' modifier and CSS variables."
+}
