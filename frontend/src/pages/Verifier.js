@@ -485,8 +485,11 @@ const Verifier = () => {
 
           {jobProgress && (
             <div className="mt-6 p-4 bg-secondary/30 rounded-md border border-border/30" data-testid="job-progress">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium">Progress</span>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Job Status:</span>
+                  {getJobStatusBadge(jobStatus)}
+                </div>
                 <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                   {jobProgress.processed_records}/{jobProgress.total_records}
                 </span>
@@ -514,7 +517,15 @@ const Verifier = () => {
                   <p className="text-xs text-muted-foreground">Active Threads</p>
                 </div>
               </div>
-              {jobProgress.eta_seconds && (
+              {jobProgress.error_count > 0 && (
+                <div className="mt-4 p-3 bg-red-600/10 rounded-md border border-red-600/20">
+                  <p className="text-sm text-red-600">
+                    <AlertTriangle className="w-4 h-4 inline mr-1" />
+                    {jobProgress.error_count} errors occurred during processing
+                  </p>
+                </div>
+              )}
+              {jobProgress.eta_seconds && jobStatus === 'processing' && (
                 <p className="text-center text-sm text-muted-foreground mt-4">
                   ETA: {Math.floor(jobProgress.eta_seconds / 60)}m {jobProgress.eta_seconds % 60}s
                 </p>
