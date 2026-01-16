@@ -19,7 +19,7 @@ from models import (
     VerificationJob, VerificationResult, JobProgress, JobStatus,
     EmailVerificationRequest, EmailFinderRequest, BulkVerificationRequest,
     Proxy, ProxyCreate, UserSettings, ExportRequest,
-    VerificationStatus, EmailProvider
+    VerificationStatus, EmailProvider, FinderResult, BulkFinderRequest
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
