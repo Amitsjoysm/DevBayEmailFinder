@@ -227,3 +227,35 @@ class ExportRequest(BaseModel):
     format: str = "csv"  # csv, xlsx, json
     filter_status: Optional[List[VerificationStatus]] = None
     filter_provider: Optional[List[EmailProvider]] = None
+
+# Email Ledger Model - Unified history for all verifications and finds
+class EmailLedger(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: EmailStr  # Unique index
+    status: VerificationStatus
+    provider: EmailProvider
+    mx_records: Optional[List[str]] = []
+    response_time: Optional[float] = 0
+    smtp_response: Optional[str] = None
+    is_catch_all: bool = False
+    is_role_based: bool = False
+    is_disposable: bool = False
+    deliverability_score: int = 0
+    
+    # Source tracking
+    source: str  # "verification" or "finder"
+    first_verified_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_verified_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    verification_count: int = 1
+    
+    # Finder-specific metadata (optional)
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    domain: Optional[str] = None
+    patterns_tested: Optional[int] = None
+    
+    # Additional metadata
+    user_id: str
+    last_job_id: Optional[str] = None
