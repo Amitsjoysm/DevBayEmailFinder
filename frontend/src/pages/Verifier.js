@@ -401,7 +401,7 @@ const Verifier = () => {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               data-testid="start-bulk-button"
               onClick={startBulkVerification}
@@ -411,6 +411,54 @@ const Verifier = () => {
               <Play className="w-4 h-4 mr-2" />
               Start Verification
             </Button>
+            
+            {currentJob && jobStatus === 'processing' && (
+              <>
+                <Button
+                  data-testid="pause-job-button"
+                  onClick={pauseJob}
+                  variant="outline"
+                  className="hover:-translate-y-0.5 transition-transform"
+                >
+                  <Pause className="w-4 h-4 mr-2" />
+                  Pause
+                </Button>
+                <Button
+                  data-testid="stop-job-button"
+                  onClick={stopJob}
+                  variant="destructive"
+                  className="hover:-translate-y-0.5 transition-transform"
+                >
+                  <Square className="w-4 h-4 mr-2" />
+                  Stop
+                </Button>
+              </>
+            )}
+            
+            {currentJob && jobStatus === 'paused' && (
+              <Button
+                data-testid="resume-job-button"
+                onClick={resumeJob}
+                className="bg-green-600 hover:bg-green-700 hover:-translate-y-0.5 transition-transform"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Resume
+              </Button>
+            )}
+            
+            {currentJob && (jobStatus === 'completed' || jobStatus === 'stopped') && (
+              <Button
+                data-testid="retry-button"
+                onClick={retryFailedVerifications}
+                disabled={retrying}
+                variant="outline"
+                className="hover:-translate-y-0.5 transition-transform"
+              >
+                {retrying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RotateCw className="w-4 h-4 mr-2" />}
+                Retry Failed
+              </Button>
+            )}
+            
             {currentJob && (
               <>
                 <Button
