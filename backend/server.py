@@ -930,6 +930,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@app.on_event("startup")
+async def startup_db():
+    """Initialize database indexes on startup"""
+    await ledger_service.initialize()
+    logger.info("Application startup complete")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
