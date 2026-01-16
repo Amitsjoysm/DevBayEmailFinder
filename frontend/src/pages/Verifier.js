@@ -427,6 +427,34 @@ const Verifier = () => {
     );
   };
 
+  const getDeliverabilityScoreBadge = (score) => {
+    let className, label, icon;
+    
+    if (score >= 80) {
+      className = 'bg-green-600/10 text-green-600 border-green-600/20';
+      label = 'Excellent';
+      icon = '🟢';
+    } else if (score >= 60) {
+      className = 'bg-lime-600/10 text-lime-600 border-lime-600/20';
+      label = 'Good';
+      icon = '🟡';
+    } else if (score >= 40) {
+      className = 'bg-yellow-600/10 text-yellow-600 border-yellow-600/20';
+      label = 'Fair';
+      icon = '🟠';
+    } else {
+      className = 'bg-red-600/10 text-red-600 border-red-600/20';
+      label = 'Poor';
+      icon = '🔴';
+    }
+
+    return (
+      <Badge className={`${className} border font-semibold`} title={`Deliverability Score: ${score}/100 - ${label}`}>
+        {icon} {score}
+      </Badge>
+    );
+  };
+
   return (
     <Layout>
       <div className="space-y-6" data-testid="verifier-container">
