@@ -399,55 +399,191 @@ async def upload_finder_csv(
     threads: int = 10,
     current_user: dict = Depends(get_current_user)
 ):
-    # Read CSV
-    contents = await file.read()
-    csv_reader = csv.DictReader(io.StringIO(contents.decode('utf-8')))
-    
-    records = []
-    for row in csv_reader:
-        first_name = row.get('first_name') or row.get('FirstName') or row.get('First Name')
-        last_name = row.get('last_name') or row.get('LastName') or row.get('Last Name')
-        domain = row.get('domain') or row.get('Domain') or row.get('company_domain')
+    """
+    Upload CSV for bulk email finder with production-ready error handling
+    - Max 5000 records
+    - Comprehensive validation
+    - Error tracking
+    """
+    try:
+        # Validate file extension
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file format. Only CSV files are allowed."
+            )
         
-        if first_name and last_name and domain:
-            records.append({
-                'first_name': first_name.strip(),
-                'last_name': last_name.strip(),
-                'domain': domain.strip()
-            })
-    
-    if not records:
-        raise HTTPException(status_code=400, detail="No valid records found in CSV")
-    
-    # Get user settings
-    settings_dict = await db.user_settings.find_one({"user_id": current_user['id']}, {"_id": 0})
-    if not settings_dict:
-        settings_dict = UserSettings(user_id=current_user['id']).model_dump()
-    
-    settings_dict['threads'] = threads
-    
-    # Create job
-    job = VerificationJob(
-        user_id=current_user['id'],
-        job_type="finder",
-        status=JobStatus.QUEUED,
-        total_records=len(records),
-        settings=settings_dict
-    )
-    
-    job_dict = job.model_dump()
-    job_dict['created_at'] = job_dict['created_at'].isoformat()
-    
-    await db.verification_jobs.insert_one(job_dict)
-    
-    # Start processing in background
-    background_tasks.add_task(
-        queue_manager.start_finder_job,
-        job.id,
-        current_user['id'],
-        records,
-        settings_dict
-    )
+        # Read CSV with size limit
+        max_size = 5 * 1024 * 1024  # 5MB
+        contents = await file.read()
+        
+        if len(contents) > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail="File too large. Maximum file size is 5MB (approximately 5000 records)."
+            )
+        
+        if len(contents) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Empty file. Please upload a CSV with name and domain data."
+            )
+        
+        # Parse CSV with error handling
+        try:
+            csv_content = contents.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                csv_content = contents.decode('latin-1')
+            except Exception:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unable to decode file. Please ensure it's a valid UTF-8 or Latin-1 encoded CSV."
+                )
+        
+        # Validate CSV structure
+        try:
+            csv_reader = csv.DictReader(io.StringIO(csv_content))
+            
+            if csv_reader.fieldnames is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid CSV format. File appears to be empty or corrupted."
+                )
+            
+            # Check for required columns
+            fieldnames_lower = [col.lower().strip().replace(' ', '_') for col in csv_reader.fieldnames]
+            
+            has_first_name = any('first' in col and 'name' in col for col in fieldnames_lower)
+            has_last_name = any('last' in col and 'name' in col for col in fieldnames_lower)
+            has_domain = any('domain' in col for col in fieldnames_lower)
+            
+            if not (has_first_name and has_last_name and has_domain):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"CSV must contain 'first_name', 'last_name', and 'domain' columns. Found: {', '.join(csv_reader.fieldnames)}"
+                )
+                
+        except csv.Error as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV parsing error: {str(e)}. Please ensure proper CSV formatting."
+            )
+        
+        # Extract records with validation
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+        records = []
+        invalid_rows = []
+        
+        for idx, row in enumerate(csv_reader, start=2):
+            try:
+                first_name = (row.get('first_name') or row.get('FirstName') or 
+                            row.get('First Name') or row.get('firstname') or row.get('First_Name'))
+                last_name = (row.get('last_name') or row.get('LastName') or 
+                           row.get('Last Name') or row.get('lastname') or row.get('Last_Name'))
+                domain = (row.get('domain') or row.get('Domain') or 
+                         row.get('company_domain') or row.get('Company Domain'))
+                
+                if first_name and last_name and domain:
+                    first_clean = first_name.strip()
+                    last_clean = last_name.strip()
+                    domain_clean = domain.strip().lower()
+                    
+                    # Remove protocol and www from domain
+                    domain_clean = domain_clean.replace('http://', '').replace('https://', '').replace('www.', '')
+                    
+                    # Basic domain validation
+                    if '.' in domain_clean and len(domain_clean) > 3:
+                        records.append({
+                            'first_name': first_clean,
+                            'last_name': last_clean,
+                            'domain': domain_clean
+                        })
+                    else:
+                        invalid_rows.append(f"Row {idx}: Invalid domain format '{domain}'")
+                else:
+                    missing_fields = []
+                    if not first_name:
+                        missing_fields.append('first_name')
+                    if not last_name:
+                        missing_fields.append('last_name')
+                    if not domain:
+                        missing_fields.append('domain')
+                    invalid_rows.append(f"Row {idx}: Missing required fields: {', '.join(missing_fields)}")
+                    
+            except Exception as e:
+                invalid_rows.append(f"Row {idx}: Error processing row - {str(e)}")
+                continue
+            
+            # Stop at 5000 records limit
+            if len(records) >= 5000:
+                logging.warning(f"CSV contains more than 5000 records. Processing first 5000 only.")
+                break
+        
+        if not records:
+            error_msg = "No valid records found in CSV."
+            if invalid_rows:
+                error_msg += f" Issues found:\n" + "\n".join(invalid_rows[:10])
+                if len(invalid_rows) > 10:
+                    error_msg += f"\n... and {len(invalid_rows) - 10} more errors"
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        # Log warnings for invalid rows
+        if invalid_rows:
+            logging.warning(f"Found {len(invalid_rows)} invalid rows in finder CSV upload by user {current_user['id']}")
+        
+        # Get user settings
+        settings_dict = await db.user_settings.find_one({"user_id": current_user['id']}, {"_id": 0})
+        if not settings_dict:
+            settings_dict = UserSettings(user_id=current_user['id']).model_dump()
+        
+        settings_dict['threads'] = min(threads, 50)  # Cap at 50 for finder
+        
+        # Create job
+        job = VerificationJob(
+            user_id=current_user['id'],
+            job_type="finder",
+            status=JobStatus.QUEUED,
+            total_records=len(records),
+            settings=settings_dict
+        )
+        
+        job_dict = job.model_dump()
+        job_dict['created_at'] = job_dict['created_at'].isoformat()
+        
+        await db.verification_jobs.insert_one(job_dict)
+        
+        # Start processing in background
+        background_tasks.add_task(
+            queue_manager.start_finder_job,
+            job.id,
+            current_user['id'],
+            records,
+            settings_dict
+        )
+        
+        response = {
+            "job_id": job.id,
+            "status": "queued",
+            "total_records": len(records)
+        }
+        
+        if invalid_rows:
+            response["warnings"] = {
+                "invalid_rows_count": len(invalid_rows),
+                "message": f"Skipped {len(invalid_rows)} invalid rows. Processing {len(records)} valid records."
+            }
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error in finder CSV upload: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Server error while processing CSV: {str(e)}"
+        )
     
     return {"job_id": job.id, "status": "queued", "total_records": len(records)}
 
