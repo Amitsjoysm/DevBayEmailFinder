@@ -54,8 +54,8 @@ class VerificationQueue:
                 await asyncio.sleep(delay_seconds - elapsed)
         self.domain_last_request[domain] = time.time()
     
-    async def update_job_progress(self, job_id: str, user_id: str):
-        """Update and broadcast job progress"""
+    async def update_job_progress(self, job_id: str, user_id: str, current_email: str = None):
+        """Update and broadcast job progress with live counter"""
         if job_id not in self.active_jobs:
             return
         
@@ -66,13 +66,17 @@ class VerificationQueue:
             # Calculate progress
             progress_percentage = (job['processed_records'] / job['total_records'] * 100) if job['total_records'] > 0 else 0
             
-            # Calculate ETA
+            # Calculate ETA and processing rate
+            processing_rate = 0
             if job['processed_records'] > 0 and job['started_at']:
                 elapsed = (datetime.now(timezone.utc) - job['started_at']).total_seconds()
                 avg_time_per_record = elapsed / job['processed_records']
                 remaining_records = job['total_records'] - job['processed_records']
                 eta_seconds = int(avg_time_per_record * remaining_records)
                 job['eta_seconds'] = eta_seconds
+                
+                # Calculate processing rate (emails per second)
+                processing_rate = round(job['processed_records'] / elapsed, 2) if elapsed > 0 else 0
             
             # Update database
             update_data = {
@@ -95,7 +99,7 @@ class VerificationQueue:
                 {"$set": update_data}
             )
             
-            # Broadcast progress via WebSocket
+            # Broadcast progress via WebSocket with enhanced live counter data
             progress_data = {
                 'job_id': job_id,
                 'status': job['status'],
@@ -108,9 +112,11 @@ class VerificationQueue:
                 'found_count': job.get('found_count', 0),
                 'not_found_count': job.get('not_found_count', 0),
                 'error_count': job.get('error_count', 0),
-                'progress_percentage': progress_percentage,
+                'progress_percentage': round(progress_percentage, 1),
                 'eta_seconds': job.get('eta_seconds'),
-                'active_threads': job_state['active_threads']
+                'active_threads': job_state['active_threads'],
+                'processing_rate': processing_rate,  # NEW: emails/second
+                'current_email': current_email  # NEW: current email being processed
             }
             
             await self.socketio.emit('job_progress', progress_data, room=user_id)
