@@ -124,7 +124,7 @@ class VerificationQueue:
             logger.error(f"Failed to update job progress: {e}")
     
     async def process_verification_batch(self, job_id: str, user_id: str, emails: List[str], settings: dict):
-        """Process a batch of email verifications with retry support"""
+        """Process a batch of email verifications with ledger caching and retry support"""
         if job_id not in self.active_jobs:
             return
         
@@ -139,28 +139,55 @@ class VerificationQueue:
                 if job['status'] != JobStatus.PROCESSING:
                     break
                 
-                # Get domain for delay management
-                domain = email.split('@')[1] if '@' in email else ''
+                # Emit current email being processed for live counter
+                await self.update_job_progress(job_id, user_id, current_email=email)
                 
-                # Apply domain-specific delay
-                domain_delay = settings.get('domain_delay', 2)
-                if domain and domain_delay > 0:
-                    await self.apply_domain_delay(domain, domain_delay)
+                # Check ledger first for cached result
+                cached_result = await self.ledger.get_from_ledger(email, user_id)
                 
-                # Apply global delay
-                if settings.get('global_delay', 0) > 0:
-                    delay = settings['global_delay']
-                    if settings.get('randomize_delays'):
-                        delay = delay * random.uniform(0.5, 1.5)
-                    await asyncio.sleep(delay)
-                
-                # Get proxy if enabled
-                proxy = None
-                if settings.get('use_proxies') and self.proxies:
-                    proxy = self.get_next_proxy()
-                
-                # Verify email
-                result = await self.verifier.verify_email(email, use_api_fallback=True, proxy=proxy)
+                if cached_result:
+                    # Use cached result from ledger
+                    logger.info(f"Using cached result for {email}")
+                    result = {
+                        'status': VerificationStatus(cached_result['status']),
+                        'provider': EmailProvider(cached_result['provider']),
+                        'mx_records': cached_result.get('mx_records', []),
+                        'response_time': cached_result.get('response_time', 0),
+                        'smtp_response': cached_result.get('smtp_response', ''),
+                        'is_catch_all': cached_result.get('is_catch_all', False),
+                        'is_role_based': cached_result.get('is_role_based', False),
+                        'is_disposable': cached_result.get('is_disposable', False),
+                        'deliverability_score': cached_result.get('deliverability_score', 0),
+                        'verified_at': datetime.now(timezone.utc),
+                        'retry_count': 0,
+                        'error_message': None
+                    }
+                else:
+                    # Get domain for delay management
+                    domain = email.split('@')[1] if '@' in email else ''
+                    
+                    # Apply domain-specific delay
+                    domain_delay = settings.get('domain_delay', 2)
+                    if domain and domain_delay > 0:
+                        await self.apply_domain_delay(domain, domain_delay)
+                    
+                    # Apply global delay
+                    if settings.get('global_delay', 0) > 0:
+                        delay = settings['global_delay']
+                        if settings.get('randomize_delays'):
+                            delay = delay * random.uniform(0.5, 1.5)
+                        await asyncio.sleep(delay)
+                    
+                    # Get proxy if enabled
+                    proxy = None
+                    if settings.get('use_proxies') and self.proxies:
+                        proxy = self.get_next_proxy()
+                    
+                    # Verify email
+                    result = await self.verifier.verify_email(email, use_api_fallback=True, proxy=proxy)
+                    
+                    # Save to ledger
+                    await self.ledger.save_to_ledger(email, user_id, result, source="verification", job_id=job_id)
                 
                 # Create result document
                 result_doc = {
@@ -180,7 +207,8 @@ class VerificationQueue:
                     'retry_count': result.get('retry_count', 0),
                     'max_retry_attempts': settings.get('max_retries', 3),
                     'error_message': result.get('error_message'),
-                    'deliverability_score': result.get('deliverability_score', 0)
+                    'deliverability_score': result.get('deliverability_score', 0),
+                    'from_cache': cached_result is not None  # NEW: Indicate if from cache
                 }
                 
                 await self.db.verification_results.insert_one(result_doc)
@@ -195,13 +223,13 @@ class VerificationQueue:
                     job['risky_count'] += 1
                 elif result['status'] in [VerificationStatus.UNKNOWN, VerificationStatus.BLOCKED]:
                     job['unknown_count'] += 1
-                    # Add to retry queue if auto-retry enabled
-                    if settings.get('auto_retry', True) and result.get('retry_count', 0) < settings.get('max_retries', 3):
+                    # Add to retry queue if auto-retry enabled and not from cache
+                    if not cached_result and settings.get('auto_retry', True) and result.get('retry_count', 0) < settings.get('max_retries', 3):
                         await self.schedule_retry(result_doc, settings)
                 
-                # Update progress every 10 records
-                if job['processed_records'] % 10 == 0:
-                    await self.update_job_progress(job_id, user_id)
+                # Update progress every 5 records for more responsive live counter
+                if job['processed_records'] % 5 == 0:
+                    await self.update_job_progress(job_id, user_id, current_email=email)
                 
                 # Emit individual result
                 await self.socketio.emit('verification_result', result_doc, room=user_id)
