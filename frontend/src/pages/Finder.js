@@ -65,7 +65,45 @@ const Finder = () => {
     if (data.job_type === 'finder' && data.job_id === currentJob) {
       toast.success('Email finding completed!');
       setBulkProcessing(false);
+      setJobStatus('completed');
       loadFinderResults(data.job_id);
+    }
+  };
+
+  const pauseJob = async () => {
+    if (!currentJob) return;
+    
+    try {
+      await jobApi.pause(currentJob);
+      setJobStatus('paused');
+      toast.success('Job paused');
+    } catch (error) {
+      toast.error('Failed to pause job');
+    }
+  };
+
+  const resumeJob = async () => {
+    if (!currentJob) return;
+    
+    try {
+      await jobApi.resume(currentJob);
+      setJobStatus('processing');
+      toast.success('Job resumed');
+    } catch (error) {
+      toast.error('Failed to resume job');
+    }
+  };
+
+  const stopJob = async () => {
+    if (!currentJob) return;
+    
+    try {
+      await jobApi.stop(currentJob);
+      setJobStatus('stopped');
+      setBulkProcessing(false);
+      toast.success('Job stopped');
+    } catch (error) {
+      toast.error('Failed to stop job');
     }
   };
 
