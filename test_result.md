@@ -283,7 +283,7 @@ frontend:
     file: "pages/Finder.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
@@ -291,6 +291,9 @@ frontend:
       - working: true
         agent: "main"
         comment: "Fully implemented with CSV validation, format instructions, sample CSV download, job controls (pause/resume/stop), real-time progress, success rate indicator, pagination, and comprehensive results display"
+      - working: true
+        agent: "main"
+        comment: "FIXED: Added job history section to view and download results from previous finder jobs. Implemented job polling for reliable progress updates. Users can now access all previous finder jobs with View Results button."
 
   - task: "Retry Controls UI"
     implemented: true
