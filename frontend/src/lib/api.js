@@ -46,10 +46,10 @@ export const verifyApi = {
 
 export const finderApi = {
   single: (data) => api.post('/find/single', data),
-  upload: (file) => {
+  upload: (file, threads = 10) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post('/find/upload', formData);
+    return api.post(`/find/upload?threads=${threads}`, formData);
   },
 };
 
@@ -59,6 +59,7 @@ export const jobApi = {
   pause: (jobId) => api.post(`/jobs/${jobId}/pause`),
   resume: (jobId) => api.post(`/jobs/${jobId}/resume`),
   stop: (jobId) => api.post(`/jobs/${jobId}/stop`),
+  retry: (jobId) => api.post(`/jobs/${jobId}/retry`),
 };
 
 export const resultsApi = {
@@ -66,6 +67,11 @@ export const resultsApi = {
     let url = `/results/${jobId}?skip=${skip}&limit=${limit}`;
     if (status) url += `&status=${status}`;
     if (provider) url += `&provider=${provider}`;
+    return api.get(url);
+  },
+  getFinder: (jobId, skip = 0, limit = 100, found = null) => {
+    let url = `/finder-results/${jobId}?skip=${skip}&limit=${limit}`;
+    if (found !== null) url += `&found=${found}`;
     return api.get(url);
   },
   export: (jobId, format = 'csv', status = null) => {
