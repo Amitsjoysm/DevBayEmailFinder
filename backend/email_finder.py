@@ -22,6 +22,40 @@ class EmailFinder:
         self.verifier = EmailVerifier()
         self.domain_patterns = {}  # Cache successful patterns per domain
     
+    def calculate_finder_score(self, result: dict) -> int:
+        """
+        Calculate deliverability score for finder results
+        
+        For found emails: Use verification score with pattern confidence adjustment
+        For not found: 0 score
+        """
+        if not result.get('found'):
+            return 0
+        
+        # Get the verification score from the found email
+        all_results = result.get('all_results', [])
+        found_email = result.get('email')
+        
+        score = 0
+        for verification in all_results:
+            if verification.get('email') == found_email:
+                # Use the verifier's scoring logic
+                score = self.verifier.calculate_deliverability_score(verification)
+                
+                # Adjust based on pattern confidence
+                patterns_tested = result.get('patterns_tested', 1)
+                if patterns_tested <= 2:
+                    # Found quickly = high confidence, add bonus
+                    score = min(100, score + 5)
+                elif patterns_tested <= 5:
+                    # Found within reasonable attempts
+                    score = min(100, score + 2)
+                # More patterns = lower confidence, no adjustment
+                
+                break
+        
+        return score
+    
     def generate_email_variants(self, first_name: str, last_name: str, domain: str, patterns: Optional[List[str]] = None) -> List[str]:
         """Generate email variants based on patterns"""
         first = first_name.lower().strip()
