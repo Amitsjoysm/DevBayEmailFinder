@@ -66,6 +66,82 @@ const Verifier = () => {
     };
   }, []);
 
+  // Load job history on mount
+  useEffect(() => {
+    loadJobHistory();
+  }, []);
+
+  // Poll job status when job is active
+  useEffect(() => {
+    if (!currentJob || !['queued', 'processing'].includes(jobStatus)) {
+      return;
+    }
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await jobApi.get(currentJob);
+        const job = response.data;
+        setJobStatus(job.status);
+        setJobProgress({
+          processed: job.processed_records,
+          total: job.total_records,
+          status: job.status,
+          valid_count: job.valid_count,
+          invalid_count: job.invalid_count,
+          risky_count: job.risky_count
+        });
+
+        // Stop polling if job completed
+        if (!['queued', 'processing'].includes(job.status)) {
+          if (job.status === 'completed') {
+            loadResults(currentJob);
+            toast.success('Verification completed!');
+          }
+          setBulkProcessing(false);
+        }
+      } catch (error) {
+        console.error('Failed to poll job status:', error);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [currentJob, jobStatus]);
+
+  const loadJobHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const response = await jobApi.list();
+      // Filter only verification jobs
+      const verificationJobs = response.data.filter(job => job.job_type === 'verification');
+      setJobHistory(verificationJobs);
+    } catch (error) {
+      console.error('Failed to load job history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const viewJobResults = async (job) => {
+    setCurrentJob(job.id);
+    setJobStatus(job.status);
+    setJobProgress({
+      processed: job.processed_records,
+      total: job.total_records,
+      status: job.status,
+      valid_count: job.valid_count,
+      invalid_count: job.invalid_count,
+      risky_count: job.risky_count
+    });
+    
+    // Load results for this job
+    await loadResults(job.id);
+    
+    // Scroll to results section
+    document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' });
+    
+    toast.success('Loaded job results');
+  };
+
   const handleJobProgress = (data) => {
     setJobProgress(data);
     setJobStatus(data.status);
@@ -80,6 +156,7 @@ const Verifier = () => {
     setBulkProcessing(false);
     setJobStatus('completed');
     loadResults(data.job_id);
+    loadJobHistory(); // Refresh job history
   };
 
   const pauseJob = async () => {
