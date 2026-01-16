@@ -10,7 +10,7 @@ import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Slider } from '../components/ui/slider';
-import { Search, Upload, CheckCircle, XCircle, Clock, Loader2, Download, Play, Pause, Square, AlertTriangle, FileText, HelpCircle, Info, TrendingUp, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Search, Upload, CheckCircle, XCircle, Clock, Loader2, Download, Play, Pause, Square, AlertTriangle, FileText, HelpCircle, Info, TrendingUp, ChevronLeft, ChevronRight, Filter, History, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import Layout from '../components/Layout';
@@ -41,6 +41,11 @@ const Finder = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalResults, setTotalResults] = useState(0);
   const [pageSize] = useState(50);
+  
+  // Job history states
+  const [jobHistory, setJobHistory] = useState([]);
+  const [showJobHistory, setShowJobHistory] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     const socket = getSocket();
