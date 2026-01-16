@@ -366,8 +366,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "All backend testing completed successfully"
-    - "Minor proxy ObjectId serialization fix needed"
+    - "Job History & Previous Results Access - Test viewing and exporting previous jobs"
+    - "Job Polling - Test progress updates when socket.io is disconnected"
+    - "Bulk verification and finder - Test with new job history feature"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
