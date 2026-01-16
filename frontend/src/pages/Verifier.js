@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { verifyApi, resultsApi } from '../lib/api';
+import { verifyApi, resultsApi, jobApi } from '../lib/api';
 import { getSocket } from '../lib/socket';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -10,7 +10,8 @@ import { Progress } from '../components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Slider } from '../components/ui/slider';
 import { Badge } from '../components/ui/badge';
-import { Upload, Mail, Play, Pause, Square, Download, CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Upload, Mail, Play, Pause, Square, Download, CheckCircle, XCircle, AlertTriangle, Loader2, RotateCw, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import Layout from '../components/Layout';
