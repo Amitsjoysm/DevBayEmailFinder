@@ -3,7 +3,7 @@ import uuid
 from typing import List, Dict, Optional
 from datetime import datetime, timezone, timedelta
 import time
-from models import VerificationJob, VerificationResult, JobStatus, VerificationStatus, FinderResult
+from models import VerificationJob, VerificationResult, JobStatus, VerificationStatus, FinderResult, EmailProvider
 from email_verifier import EmailVerifier
 from email_finder import EmailFinder
 from ledger_service import LedgerService
