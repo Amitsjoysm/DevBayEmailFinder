@@ -1,15 +1,32 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import socketio
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
+from typing import List, Optional
+import csv
+import io
+import json
 from datetime import datetime, timezone
+import uuid
 
+from models import (
+    User, UserCreate, UserLogin, UserResponse, Token,
+    VerificationJob, VerificationResult, JobProgress, JobStatus,
+    EmailVerificationRequest, EmailFinderRequest, BulkVerificationRequest,
+    Proxy, ProxyCreate, UserSettings, ExportRequest,
+    VerificationStatus, EmailProvider
+)
+from auth import (
+    get_password_hash, verify_password, create_access_token, get_current_user
+)
+from email_verifier import EmailVerifier
+from email_finder import EmailFinder
+from queue_manager import VerificationQueue
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,52 +36,536 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
+# Socket.IO setup
+sio = socketio.AsyncServer(
+    async_mode='asgi',
+    cors_allowed_origins='*',
+    logger=True,
+    engineio_logger=False
+)
+
+# Create the main app
 app = FastAPI()
+
+# Create Socket.IO ASGI app
+socket_app = socketio.ASGIApp(sio, app)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# Initialize services
+verifier = EmailVerifier()
+finder = EmailFinder()
+queue_manager = VerificationQueue(db, sio)
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+# Socket.IO events
+@sio.event
+async def connect(sid, environ):
+    logging.info(f"Client connected: {sid}")
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+@sio.event
+async def disconnect(sid):
+    logging.info(f"Client disconnected: {sid}")
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
+@sio.event
+async def join_room(sid, data):
+    """Join user-specific room for updates"""
+    room = data.get('user_id')
+    if room:
+        sio.enter_room(sid, room)
+        logging.info(f"Client {sid} joined room {room}")
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
+# Authentication endpoints
+@api_router.post("/auth/register", response_model=Token)
+async def register(user_data: UserCreate):
+    # Check if user exists
+    existing_user = await db.users.find_one({"email": user_data.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
+    # Create user
+    user = User(
+        email=user_data.email,
+        hashed_password=get_password_hash(user_data.password),
+        full_name=user_data.full_name
+    )
     
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
+    user_dict = user.model_dump()
+    user_dict['created_at'] = user_dict['created_at'].isoformat()
+    
+    await db.users.insert_one(user_dict)
+    
+    # Create default settings
+    settings = UserSettings(user_id=user.id)
+    settings_dict = settings.model_dump()
+    settings_dict['updated_at'] = settings_dict['updated_at'].isoformat()
+    await db.user_settings.insert_one(settings_dict)
+    
+    # Create token
+    token = create_access_token(data={"sub": user.id, "email": user.email})
+    
+    return Token(
+        access_token=token,
+        user=UserResponse(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role,
+            created_at=user.created_at
+        )
+    )
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
+@api_router.post("/auth/login", response_model=Token)
+async def login(credentials: UserLogin):
+    # Find user
+    user_dict = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    if not user_dict:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
+    # Verify password
+    if not verify_password(credentials.password, user_dict['hashed_password']):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    return status_checks
+    # Create token
+    token = create_access_token(data={"sub": user_dict['id'], "email": user_dict['email']})
+    
+    return Token(
+        access_token=token,
+        user=UserResponse(
+            id=user_dict['id'],
+            email=user_dict['email'],
+            full_name=user_dict.get('full_name'),
+            role=user_dict['role'],
+            created_at=datetime.fromisoformat(user_dict['created_at'])
+        )
+    )
+
+@api_router.get("/auth/me", response_model=UserResponse)
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    user_dict = await db.users.find_one({"id": current_user['id']}, {"_id": 0})
+    if not user_dict:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return UserResponse(
+        id=user_dict['id'],
+        email=user_dict['email'],
+        full_name=user_dict.get('full_name'),
+        role=user_dict['role'],
+        created_at=datetime.fromisoformat(user_dict['created_at'])
+    )
+
+# Email verification endpoints
+@api_router.post("/verify/single")
+async def verify_single_email(
+    request: EmailVerificationRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    result = await verifier.verify_email(request.email, use_api_fallback=True)
+    return result
+
+@api_router.post("/verify/bulk")
+async def verify_bulk_emails(
+    background_tasks: BackgroundTasks,
+    emails: List[str],
+    threads: int = 10,
+    delay: int = 0,
+    current_user: dict = Depends(get_current_user)
+):
+    # Get user settings
+    settings_dict = await db.user_settings.find_one({"user_id": current_user['id']}, {"_id": 0})
+    if not settings_dict:
+        settings_dict = UserSettings(user_id=current_user['id']).model_dump()
+    
+    # Override with request params
+    settings_dict['threads'] = threads
+    settings_dict['global_delay'] = delay
+    
+    # Create job
+    job = VerificationJob(
+        user_id=current_user['id'],
+        job_type="verification",
+        status=JobStatus.QUEUED,
+        total_records=len(emails),
+        settings=settings_dict
+    )
+    
+    job_dict = job.model_dump()
+    job_dict['created_at'] = job_dict['created_at'].isoformat()
+    
+    await db.verification_jobs.insert_one(job_dict)
+    
+    # Start processing in background
+    background_tasks.add_task(
+        queue_manager.start_verification_job,
+        job.id,
+        current_user['id'],
+        emails,
+        settings_dict
+    )
+    
+    return {"job_id": job.id, "status": "queued", "total_records": len(emails)}
+
+@api_router.post("/verify/upload")
+async def upload_verification_csv(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    threads: int = 10,
+    delay: int = 0,
+    current_user: dict = Depends(get_current_user)
+):
+    # Read CSV
+    contents = await file.read()
+    csv_reader = csv.DictReader(io.StringIO(contents.decode('utf-8')))
+    
+    emails = []
+    for row in csv_reader:
+        # Try common column names
+        email = row.get('email') or row.get('Email') or row.get('EMAIL')
+        if email:
+            emails.append(email.strip())
+    
+    if not emails:
+        raise HTTPException(status_code=400, detail="No emails found in CSV")
+    
+    # Get user settings
+    settings_dict = await db.user_settings.find_one({"user_id": current_user['id']}, {"_id": 0})
+    if not settings_dict:
+        settings_dict = UserSettings(user_id=current_user['id']).model_dump()
+    
+    settings_dict['threads'] = threads
+    settings_dict['global_delay'] = delay
+    
+    # Create job
+    job = VerificationJob(
+        user_id=current_user['id'],
+        job_type="verification",
+        status=JobStatus.QUEUED,
+        total_records=len(emails),
+        settings=settings_dict
+    )
+    
+    job_dict = job.model_dump()
+    job_dict['created_at'] = job_dict['created_at'].isoformat()
+    
+    await db.verification_jobs.insert_one(job_dict)
+    
+    # Start processing in background
+    background_tasks.add_task(
+        queue_manager.start_verification_job,
+        job.id,
+        current_user['id'],
+        emails,
+        settings_dict
+    )
+    
+    return {"job_id": job.id, "status": "queued", "total_records": len(emails)}
+
+# Email finder endpoints
+@api_router.post("/find/single")
+async def find_single_email(
+    request: EmailFinderRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    result = await finder.find_email(
+        request.first_name,
+        request.last_name,
+        request.domain,
+        patterns=request.patterns,
+        stop_on_first_valid=True
+    )
+    return result
+
+@api_router.post("/find/upload")
+async def upload_finder_csv(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    # Read CSV
+    contents = await file.read()
+    csv_reader = csv.DictReader(io.StringIO(contents.decode('utf-8')))
+    
+    records = []
+    for row in csv_reader:
+        first_name = row.get('first_name') or row.get('FirstName') or row.get('First Name')
+        last_name = row.get('last_name') or row.get('LastName') or row.get('Last Name')
+        domain = row.get('domain') or row.get('Domain') or row.get('company_domain')
+        
+        if first_name and last_name and domain:
+            records.append({
+                'first_name': first_name.strip(),
+                'last_name': last_name.strip(),
+                'domain': domain.strip()
+            })
+    
+    if not records:
+        raise HTTPException(status_code=400, detail="No valid records found in CSV")
+    
+    # Create job
+    job = VerificationJob(
+        user_id=current_user['id'],
+        job_type="finder",
+        status=JobStatus.QUEUED,
+        total_records=len(records)
+    )
+    
+    job_dict = job.model_dump()
+    job_dict['created_at'] = job_dict['created_at'].isoformat()
+    
+    await db.verification_jobs.insert_one(job_dict)
+    
+    return {"job_id": job.id, "status": "queued", "total_records": len(records)}
+
+# Job management endpoints
+@api_router.get("/jobs")
+async def get_jobs(
+    current_user: dict = Depends(get_current_user)
+):
+    jobs = await db.verification_jobs.find(
+        {"user_id": current_user['id']},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    
+    return jobs
+
+@api_router.get("/jobs/{job_id}")
+async def get_job(
+    job_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    job = await db.verification_jobs.find_one(
+        {"id": job_id, "user_id": current_user['id']},
+        {"_id": 0}
+    )
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    return job
+
+@api_router.post("/jobs/{job_id}/pause")
+async def pause_job(
+    job_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    await queue_manager.pause_job(job_id)
+    return {"status": "paused"}
+
+@api_router.post("/jobs/{job_id}/resume")
+async def resume_job(
+    job_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    await queue_manager.resume_job(job_id)
+    return {"status": "resumed"}
+
+@api_router.post("/jobs/{job_id}/stop")
+async def stop_job(
+    job_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    await queue_manager.stop_job(job_id)
+    return {"status": "stopped"}
+
+# Results endpoints
+@api_router.get("/results/{job_id}")
+async def get_results(
+    job_id: str,
+    skip: int = 0,
+    limit: int = 100,
+    status: Optional[str] = None,
+    provider: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    # Verify job ownership
+    job = await db.verification_jobs.find_one(
+        {"id": job_id, "user_id": current_user['id']},
+        {"_id": 0}
+    )
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Build filter
+    filter_query = {"job_id": job_id}
+    if status:
+        filter_query["status"] = status
+    if provider:
+        filter_query["provider"] = provider
+    
+    # Get results
+    results = await db.verification_results.find(
+        filter_query,
+        {"_id": 0}
+    ).skip(skip).limit(limit).to_list(limit)
+    
+    # Get total count
+    total = await db.verification_results.count_documents(filter_query)
+    
+    return {
+        "results": results,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+@api_router.get("/results/{job_id}/export")
+async def export_results(
+    job_id: str,
+    format: str = "csv",
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    # Verify job ownership
+    job = await db.verification_jobs.find_one(
+        {"id": job_id, "user_id": current_user['id']},
+        {"_id": 0}
+    )
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Build filter
+    filter_query = {"job_id": job_id}
+    if status:
+        filter_query["status"] = status
+    
+    # Get all results
+    results = await db.verification_results.find(filter_query, {"_id": 0}).to_list(None)
+    
+    if format == "json":
+        return results
+    elif format == "csv":
+        # Create CSV
+        output = io.StringIO()
+        if results:
+            fieldnames = results[0].keys()
+            writer = csv.DictWriter(output, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(results)
+        
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=verification_results_{job_id}.csv"
+            }
+        )
+
+# Settings endpoints
+@api_router.get("/settings")
+async def get_settings(
+    current_user: dict = Depends(get_current_user)
+):
+    settings = await db.user_settings.find_one(
+        {"user_id": current_user['id']},
+        {"_id": 0}
+    )
+    
+    if not settings:
+        settings = UserSettings(user_id=current_user['id']).model_dump()
+        settings['updated_at'] = settings['updated_at'].isoformat()
+        await db.user_settings.insert_one(settings)
+    
+    return settings
+
+@api_router.put("/settings")
+async def update_settings(
+    settings: UserSettings,
+    current_user: dict = Depends(get_current_user)
+):
+    settings.user_id = current_user['id']
+    settings.updated_at = datetime.now(timezone.utc)
+    
+    settings_dict = settings.model_dump()
+    settings_dict['updated_at'] = settings_dict['updated_at'].isoformat()
+    
+    await db.user_settings.update_one(
+        {"user_id": current_user['id']},
+        {"$set": settings_dict},
+        upsert=True
+    )
+    
+    return settings_dict
+
+# Proxy endpoints
+@api_router.post("/proxies")
+async def add_proxy(
+    proxy: ProxyCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    proxy_obj = Proxy(
+        user_id=current_user['id'],
+        **proxy.model_dump()
+    )
+    
+    proxy_dict = proxy_obj.model_dump()
+    proxy_dict['created_at'] = proxy_dict['created_at'].isoformat()
+    
+    await db.proxies.insert_one(proxy_dict)
+    
+    return proxy_dict
+
+@api_router.get("/proxies")
+async def get_proxies(
+    current_user: dict = Depends(get_current_user)
+):
+    proxies = await db.proxies.find(
+        {"user_id": current_user['id']},
+        {"_id": 0}
+    ).to_list(None)
+    
+    return proxies
+
+@api_router.delete("/proxies/{proxy_id}")
+async def delete_proxy(
+    proxy_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    result = await db.proxies.delete_one({
+        "id": proxy_id,
+        "user_id": current_user['id']
+    })
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    
+    return {"status": "deleted"}
+
+# Analytics endpoints
+@api_router.get("/analytics/dashboard")
+async def get_dashboard_analytics(
+    current_user: dict = Depends(get_current_user)
+):
+    # Get all user jobs
+    jobs = await db.verification_jobs.find(
+        {"user_id": current_user['id']},
+        {"_id": 0}
+    ).to_list(None)
+    
+    # Calculate totals
+    total_verified = sum(job.get('processed_records', 0) for job in jobs)
+    total_valid = sum(job.get('valid_count', 0) for job in jobs)
+    total_invalid = sum(job.get('invalid_count', 0) for job in jobs)
+    total_risky = sum(job.get('risky_count', 0) for job in jobs)
+    
+    # Get provider distribution
+    provider_pipeline = [
+        {"$match": {"user_id": current_user['id']}},
+        {"$group": {"_id": "$provider", "count": {"$sum": 1}}}
+    ]
+    provider_stats = await db.verification_results.aggregate(provider_pipeline).to_list(None)
+    
+    return {
+        "total_verified": total_verified,
+        "total_valid": total_valid,
+        "total_invalid": total_invalid,
+        "total_risky": total_risky,
+        "success_rate": (total_valid / total_verified * 100) if total_verified > 0 else 0,
+        "provider_distribution": provider_stats,
+        "recent_jobs": jobs[:5]
+    }
 
 # Include the router in the main app
 app.include_router(api_router)
