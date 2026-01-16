@@ -402,9 +402,11 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Job History & Previous Results Access - Test viewing and exporting previous jobs"
-    - "Job Polling - Test progress updates when socket.io is disconnected"
-    - "Bulk verification and finder - Test with new job history feature"
+    - "Deliverability Scoring System - Test score calculation for all statuses (valid, invalid, risky, unknown)"
+    - "Production-Ready CSV Error Handling - Test with large files (5K records), malformed CSVs, empty files, invalid formats"
+    - "Deliverability Score UI Display - Verify scores shown correctly in Verifier and Finder results"
+    - "CSV Export with Scores - Verify deliverability_score included in CSV/JSON exports"
+    - "Large File Processing - Test with 5000 record CSV to verify chunking and error handling"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
