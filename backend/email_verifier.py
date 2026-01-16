@@ -27,6 +27,83 @@ class EmailVerifier:
         self.domain_request_times = {}  # Track last request time per domain
         self.current_proxy = None
     
+    def calculate_deliverability_score(self, result: dict) -> int:
+        """
+        Calculate deliverability score (0-100) based on multiple factors
+        
+        Scoring breakdown:
+        - Valid: 80-100 (base 80 + bonuses)
+        - Risky: 40-60 
+        - Unknown: 20-40
+        - Invalid/Disposable/Blocked: 0-20
+        """
+        score = 0
+        status = result.get('status')
+        
+        # Base score based on status
+        if status == VerificationStatus.VALID:
+            score = 80
+            
+            # Bonus for fast response time (<2s)
+            if result.get('response_time', 999) < 2.0:
+                score += 5
+            
+            # Bonus for reputable provider
+            provider = result.get('provider')
+            reputable_providers = [
+                EmailProvider.GMAIL, EmailProvider.GSUITE, 
+                EmailProvider.O365, EmailProvider.OUTLOOK
+            ]
+            if provider in reputable_providers:
+                score += 5
+            
+            # Bonus for not catch-all
+            if not result.get('is_catch_all', False):
+                score += 5
+            
+            # Bonus for not role-based
+            if not result.get('is_role_based', False):
+                score += 5
+        
+        elif status == VerificationStatus.RISKY:
+            score = 45
+            # Adjust based on factors
+            if result.get('is_catch_all', False):
+                score = 45  # Catch-all is risky
+            if result.get('is_role_based', False):
+                score = 50  # Role-based slightly better
+            
+            # Small bonus for reputable provider even if risky
+            provider = result.get('provider')
+            if provider in [EmailProvider.GMAIL, EmailProvider.GSUITE, EmailProvider.O365]:
+                score += 10
+        
+        elif status == VerificationStatus.UNKNOWN:
+            score = 30
+            # Adjust based on retry count
+            retry_count = result.get('retry_count', 0)
+            if retry_count == 0:
+                score = 35  # First attempt, might just be network issue
+            elif retry_count > 2:
+                score = 20  # Multiple retries failed, likely problematic
+        
+        elif status == VerificationStatus.BLOCKED:
+            score = 15  # IP blocked, email might be valid but can't verify
+        
+        elif status == VerificationStatus.DISPOSABLE:
+            score = 10  # Disposable emails are low quality
+        
+        elif status == VerificationStatus.INVALID:
+            score = 5  # Invalid emails
+            if result.get('error_message') and 'format' in result.get('error_message', '').lower():
+                score = 0  # Format errors are definitive
+        
+        elif status == VerificationStatus.PENDING:
+            score = 0  # Not yet verified
+        
+        # Ensure score is within bounds
+        return max(0, min(100, score))
+    
     def is_valid_email_format(self, email: str) -> bool:
         """Validate email format using RFC 5322 regex"""
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
