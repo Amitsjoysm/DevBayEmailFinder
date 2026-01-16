@@ -31,6 +31,7 @@ const Finder = () => {
   const [currentJob, setCurrentJob] = useState(null);
   const [jobProgress, setJobProgress] = useState(null);
   const [finderResults, setFinderResults] = useState([]);
+  const [jobStatus, setJobStatus] = useState(null);
 
   useEffect(() => {
     const socket = getSocket();
