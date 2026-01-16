@@ -322,6 +322,9 @@ class EmailVerifier:
             
             result['response_time'] = time.time() - start_time
             
+            # Calculate deliverability score
+            result['deliverability_score'] = self.calculate_deliverability_score(result)
+            
             # Cache successful results
             if result['status'] in [VerificationStatus.VALID, VerificationStatus.INVALID]:
                 self.verification_cache[email] = {
@@ -334,5 +337,8 @@ class EmailVerifier:
             result['smtp_response'] = f'Verification error: {str(e)}'
             result['error_message'] = str(e)
             result['response_time'] = time.time() - start_time
+        
+        # Calculate deliverability score even for errors
+        result['deliverability_score'] = self.calculate_deliverability_score(result)
         
         return result
