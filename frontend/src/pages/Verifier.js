@@ -404,7 +404,47 @@ const Verifier = () => {
         </Card>
 
         <Card className="bg-surface border border-border/50 p-6">
-          <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Chivo, sans-serif' }}>Bulk Verification</h2>
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h2 className="text-xl font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>Bulk Verification</h2>
+              <p className="text-sm text-muted-foreground mt-1">Upload a CSV file with emails to verify in bulk</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowInstructions(!showInstructions)}
+              className="hover:bg-secondary/80"
+            >
+              <HelpCircle className="w-4 h-4 mr-2" />
+              {showInstructions ? 'Hide' : 'Show'} Instructions
+            </Button>
+          </div>
+          
+          {showInstructions && (
+            <div className="mb-6 p-4 bg-blue-600/10 border border-blue-600/20 rounded-md">
+              <h3 className="font-bold text-sm mb-2 flex items-center">
+                <Info className="w-4 h-4 mr-2 text-blue-600" />
+                CSV Format Instructions
+              </h3>
+              <ul className="text-sm text-muted-foreground space-y-1 ml-6 list-disc">
+                <li>CSV file must contain a column named <code className="bg-secondary px-1 py-0.5 rounded">email</code></li>
+                <li>One email address per row</li>
+                <li>First row should be the header: <code className="bg-secondary px-1 py-0.5 rounded">email</code></li>
+                <li>Maximum recommended: 10,000 emails per file</li>
+              </ul>
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadSampleCSV}
+                  className="hover:-translate-y-0.5 transition-transform"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Download Sample CSV
+                </Button>
+              </div>
+            </div>
+          )}
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
@@ -418,16 +458,26 @@ const Verifier = () => {
                   className="bg-secondary/50 border-border"
                 />
               </div>
-              {bulkFile && (
-                <p className="text-xs text-muted-foreground mt-2">
+              {bulkFile && !csvValidationError && (
+                <p className="text-xs text-green-600 mt-2 flex items-center">
+                  <CheckCircle className="w-3 h-3 mr-1" />
                   Selected: {bulkFile.name}
+                </p>
+              )}
+              {csvValidationError && (
+                <p className="text-xs text-red-600 mt-2 flex items-center">
+                  <XCircle className="w-3 h-3 mr-1" />
+                  {csvValidationError}
                 </p>
               )}
             </div>
 
             <div className="space-y-4">
               <div>
-                <Label className="mb-2 block">Threads: {threads[0]}</Label>
+                <Label className="mb-2 block flex items-center">
+                  Threads: {threads[0]}
+                  <span className="ml-2 text-xs text-muted-foreground">(Concurrent verifications)</span>
+                </Label>
                 <Slider
                   data-testid="threads-slider"
                   value={threads}
@@ -440,7 +490,10 @@ const Verifier = () => {
               </div>
 
               <div>
-                <Label className="mb-2 block">Delay: {delay[0]}s</Label>
+                <Label className="mb-2 block flex items-center">
+                  Delay: {delay[0]}s
+                  <span className="ml-2 text-xs text-muted-foreground">(Between requests)</span>
+                </Label>
                 <Slider
                   data-testid="delay-slider"
                   value={delay}
@@ -458,11 +511,21 @@ const Verifier = () => {
             <Button
               data-testid="start-bulk-button"
               onClick={startBulkVerification}
-              disabled={bulkProcessing || !bulkFile}
+              disabled={bulkProcessing || !bulkFile || csvValidationError}
               className="bg-blue-600 hover:bg-blue-700 hover:-translate-y-0.5 transition-transform"
+              title="Start bulk verification process"
             >
-              <Play className="w-4 h-4 mr-2" />
-              Start Verification
+              {bulkProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 mr-2" />
+                  Start Verification
+                </>
+              )}
             </Button>
             
             {currentJob && jobStatus === 'processing' && (
@@ -472,6 +535,7 @@ const Verifier = () => {
                   onClick={pauseJob}
                   variant="outline"
                   className="hover:-translate-y-0.5 transition-transform"
+                  title="Pause the current job"
                 >
                   <Pause className="w-4 h-4 mr-2" />
                   Pause
@@ -481,6 +545,7 @@ const Verifier = () => {
                   onClick={stopJob}
                   variant="destructive"
                   className="hover:-translate-y-0.5 transition-transform"
+                  title="Stop the current job permanently"
                 >
                   <Square className="w-4 h-4 mr-2" />
                   Stop
@@ -493,6 +558,7 @@ const Verifier = () => {
                 data-testid="resume-job-button"
                 onClick={resumeJob}
                 className="bg-green-600 hover:bg-green-700 hover:-translate-y-0.5 transition-transform"
+                title="Resume the paused job"
               >
                 <Play className="w-4 h-4 mr-2" />
                 Resume
@@ -506,6 +572,7 @@ const Verifier = () => {
                 disabled={retrying}
                 variant="outline"
                 className="hover:-translate-y-0.5 transition-transform"
+                title="Retry all failed and unknown verifications"
               >
                 {retrying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RotateCw className="w-4 h-4 mr-2" />}
                 Retry Failed
@@ -519,6 +586,7 @@ const Verifier = () => {
                   onClick={() => exportResults('csv')}
                   variant="outline"
                   className="hover:-translate-y-0.5 transition-transform"
+                  title="Export results as CSV"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Export CSV
@@ -528,6 +596,7 @@ const Verifier = () => {
                   onClick={() => exportResults('json')}
                   variant="outline"
                   className="hover:-translate-y-0.5 transition-transform"
+                  title="Export results as JSON"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Export JSON
@@ -542,46 +611,69 @@ const Verifier = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">Job Status:</span>
                   {getJobStatusBadge(jobStatus)}
+                  {jobStatus === 'processing' && (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  )}
                 </div>
-                <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {jobProgress.processed_records}/{jobProgress.total_records}
-                </span>
+                <div className="text-right">
+                  <span className="text-sm font-mono">
+                    {jobProgress.processed_records}/{jobProgress.total_records}
+                  </span>
+                  <p className="text-xs text-muted-foreground">
+                    {jobProgress.progress_percentage?.toFixed(1)}% Complete
+                  </p>
+                </div>
               </div>
               <Progress value={jobProgress.progress_percentage} className="mb-4" />
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
-                <div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-center mb-4">
+                <div className="p-3 bg-green-600/10 rounded-md border border-green-600/20">
                   <p className="text-2xl font-bold text-green-600">{jobProgress.valid_count}</p>
                   <p className="text-xs text-muted-foreground">Valid</p>
                 </div>
-                <div>
+                <div className="p-3 bg-red-600/10 rounded-md border border-red-600/20">
                   <p className="text-2xl font-bold text-red-600">{jobProgress.invalid_count}</p>
                   <p className="text-xs text-muted-foreground">Invalid</p>
                 </div>
-                <div>
+                <div className="p-3 bg-yellow-600/10 rounded-md border border-yellow-600/20">
                   <p className="text-2xl font-bold text-yellow-600">{jobProgress.risky_count}</p>
                   <p className="text-xs text-muted-foreground">Risky</p>
                 </div>
-                <div>
+                <div className="p-3 bg-gray-600/10 rounded-md border border-gray-600/20">
                   <p className="text-2xl font-bold text-gray-600">{jobProgress.unknown_count}</p>
                   <p className="text-xs text-muted-foreground">Unknown</p>
                 </div>
-                <div>
+                <div className="p-3 bg-blue-600/10 rounded-md border border-blue-600/20">
                   <p className="text-2xl font-bold text-blue-600">{jobProgress.active_threads}</p>
                   <p className="text-xs text-muted-foreground">Active Threads</p>
                 </div>
+                <div className="p-3 bg-purple-600/10 rounded-md border border-purple-600/20">
+                  <p className="text-2xl font-bold text-purple-600">
+                    {jobProgress.valid_count > 0 ? ((jobProgress.valid_count / jobProgress.processed_records) * 100).toFixed(1) : '0'}%
+                  </p>
+                  <p className="text-xs text-muted-foreground flex items-center justify-center">
+                    <TrendingUp className="w-3 h-3 mr-1" />
+                    Success Rate
+                  </p>
+                </div>
               </div>
+              
               {jobProgress.error_count > 0 && (
-                <div className="mt-4 p-3 bg-red-600/10 rounded-md border border-red-600/20">
+                <div className="mt-3 p-3 bg-red-600/10 rounded-md border border-red-600/20">
                   <p className="text-sm text-red-600">
                     <AlertTriangle className="w-4 h-4 inline mr-1" />
                     {jobProgress.error_count} errors occurred during processing
                   </p>
                 </div>
               )}
+              
               {jobProgress.eta_seconds && jobStatus === 'processing' && (
-                <p className="text-center text-sm text-muted-foreground mt-4">
-                  ETA: {Math.floor(jobProgress.eta_seconds / 60)}m {jobProgress.eta_seconds % 60}s
-                </p>
+                <div className="mt-3 p-3 bg-blue-600/10 rounded-md border border-blue-600/20">
+                  <p className="text-sm text-blue-600 flex items-center justify-center">
+                    <Clock className="w-4 h-4 mr-2" />
+                    Estimated time remaining: {Math.floor(jobProgress.eta_seconds / 60)}m {jobProgress.eta_seconds % 60}s
+                  </p>
+                </div>
               )}
             </div>
           )}
