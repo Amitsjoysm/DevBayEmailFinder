@@ -29,6 +29,12 @@ const Verifier = () => {
   const [currentJob, setCurrentJob] = useState(null);
   const [jobProgress, setJobProgress] = useState(null);
   const [results, setResults] = useState([]);
+  const [jobStatus, setJobStatus] = useState(null);
+  const [retrying, setRetrying] = useState(false);
+  
+  // Filters
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [providerFilter, setProviderFilter] = useState('all');
 
   useEffect(() => {
     const socket = getSocket();
