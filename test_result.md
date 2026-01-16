@@ -200,8 +200,8 @@ backend:
 
   - task: "Job Management (Pause/Resume/Stop)"
     implemented: true
-    working: "partial"
-    file: "queue_manager.py, server.py"
+    working: true
+    file: "queue_manager.py, server.py, Verifier.js, Finder.js"
     stuck_count: 0
     priority: "medium"
     needs_retesting: true
@@ -209,6 +209,9 @@ backend:
       - working: "partial"
         agent: "main"
         comment: "Backend endpoints exist but no UI controls for pause/resume"
+      - working: true
+        agent: "main"
+        comment: "Enhanced with tooltips, better button states, loading indicators, and comprehensive job status badges on both Verifier and Finder pages"
 
 frontend:
   - task: "Single Email Verification UI"
