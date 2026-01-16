@@ -240,7 +240,7 @@ class VerificationQueue:
                 continue
     
     async def process_finder_batch(self, job_id: str, user_id: str, records: List[Dict], settings: dict):
-        """Process a batch of email finder requests"""
+        """Process a batch of email finder requests with ledger caching"""
         if job_id not in self.active_jobs:
             return
         
@@ -263,6 +263,10 @@ class VerificationQueue:
                     logger.warning(f"Skipping invalid record: {record}")
                     job['processed_records'] += 1
                     continue
+                
+                # Construct current search info for live counter
+                current_search = f"{first_name} {last_name}@{domain}"
+                await self.update_job_progress(job_id, user_id, current_email=current_search)
                 
                 # Apply domain-specific delay
                 domain_delay = settings.get('domain_delay', 2)
@@ -289,6 +293,16 @@ class VerificationQueue:
                     stop_on_first_valid=settings.get('stop_on_first_valid', True),
                     proxy=proxy
                 )
+                
+                # If email was found, save to ledger
+                if result.get('found') and result.get('email'):
+                    await self.ledger.save_to_ledger(
+                        result['email'], 
+                        user_id, 
+                        result, 
+                        source="finder", 
+                        job_id=job_id
+                    )
                 
                 # Create finder result document
                 finder_doc = {
