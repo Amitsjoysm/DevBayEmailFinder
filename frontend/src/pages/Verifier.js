@@ -762,8 +762,110 @@ const Verifier = () => {
           )}
         </Card>
 
+        {/* Job History Section */}
+        <Card className="bg-surface border border-border/50 p-6">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h2 className="text-xl font-bold flex items-center" style={{ fontFamily: 'Chivo, sans-serif' }}>
+                <History className="w-5 h-5 mr-2" />
+                Previous Jobs
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                View and download results from previous verification jobs
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setShowJobHistory(!showJobHistory);
+                if (!showJobHistory) loadJobHistory();
+              }}
+              className="hover:bg-secondary/80"
+            >
+              {showJobHistory ? 'Hide' : 'Show'} History
+            </Button>
+          </div>
+
+          {showJobHistory && (
+            <div className="mt-4">
+              {loadingHistory ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                  <span className="ml-3 text-muted-foreground">Loading job history...</span>
+                </div>
+              ) : jobHistory.length > 0 ? (
+                <div className="space-y-2">
+                  {jobHistory.slice(0, 10).map((job) => (
+                    <div 
+                      key={job.id} 
+                      className={`flex items-center justify-between p-4 bg-secondary/30 rounded-md border transition-all ${
+                        currentJob === job.id 
+                          ? 'border-blue-600/50 bg-blue-600/5' 
+                          : 'border-border/30 hover:border-border/60'
+                      }`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <p className="text-sm font-mono text-muted-foreground">
+                            {job.id.substring(0, 8)}...
+                          </p>
+                          {getJobStatusBadge(job.status)}
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(job.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                          <div>
+                            <span className="text-muted-foreground">Records:</span>
+                            <span className="ml-1 font-mono">{job.total_records}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Processed:</span>
+                            <span className="ml-1 font-mono">{job.processed_records || 0}</span>
+                          </div>
+                          <div>
+                            <span className="text-green-600">Valid:</span>
+                            <span className="ml-1 font-mono">{job.valid_count || 0}</span>
+                          </div>
+                          <div>
+                            <span className="text-red-600">Invalid:</span>
+                            <span className="ml-1 font-mono">{job.invalid_count || 0}</span>
+                          </div>
+                          <div>
+                            <span className="text-yellow-600">Risky:</span>
+                            <span className="ml-1 font-mono">{job.risky_count || 0}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 ml-4">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => viewJobResults(job)}
+                          className="hover:-translate-y-0.5 transition-transform"
+                          title="View results for this job"
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View Results
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <History className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>No previous jobs found</p>
+                  <p className="text-xs mt-1">Start your first bulk verification above</p>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+
         {currentJob && (
-          <Card className="bg-surface border border-border/50 p-6">
+          <Card className="bg-surface border border-border/50 p-6" id="results-section">
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h2 className="text-xl font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>Verification Results</h2>
