@@ -912,6 +912,56 @@ async def get_dashboard_analytics(
         "recent_jobs": jobs[:5]
     }
 
+# ===== LEDGER ENDPOINTS =====
+@api_router.get("/ledger/stats")
+async def get_ledger_stats(current_user: dict = Depends(get_current_user)):
+    """Get ledger statistics for current user"""
+    try:
+        stats = await ledger_service.get_ledger_stats(current_user['id'])
+        return stats
+    except Exception as e:
+        logger.error(f"Failed to get ledger stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/ledger/search")
+async def search_ledger(
+    query: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    current_user: dict = Depends(get_current_user)
+):
+    """Search ledger entries"""
+    try:
+        results = await ledger_service.search_ledger(
+            current_user['id'], 
+            query=query, 
+            status=status, 
+            limit=limit, 
+            skip=skip
+        )
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        logger.error(f"Failed to search ledger: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/ledger/{email}")
+async def get_ledger_entry(
+    email: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get specific email from ledger"""
+    try:
+        entry = await ledger_service.get_from_ledger(email, current_user['id'])
+        if not entry:
+            raise HTTPException(status_code=404, detail="Email not found in ledger")
+        return entry
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get ledger entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router in the main app
 app.include_router(api_router)
 
