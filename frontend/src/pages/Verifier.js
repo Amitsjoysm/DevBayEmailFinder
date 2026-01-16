@@ -231,21 +231,27 @@ const Verifier = () => {
     }
   };
 
-  const loadResults = async (jobId) => {
+  const loadResults = async (jobId, page = 0) => {
+    setLoadingResults(true);
     try {
       const status = statusFilter !== 'all' ? statusFilter : null;
       const provider = providerFilter !== 'all' ? providerFilter : null;
-      const response = await resultsApi.get(jobId, 0, 100, status, provider);
+      const response = await resultsApi.get(jobId, page * pageSize, pageSize, status, provider);
       setResults(response.data.results);
+      setTotalResults(response.data.total);
+      setCurrentPage(page);
     } catch (error) {
       console.error('Failed to load results:', error);
+      toast.error('Failed to load results');
+    } finally {
+      setLoadingResults(false);
     }
   };
 
   // Reload results when filters change
   useEffect(() => {
     if (currentJob) {
-      loadResults(currentJob);
+      loadResults(currentJob, 0);
     }
   }, [statusFilter, providerFilter]);
 
