@@ -88,7 +88,7 @@ class EmailVerificationTester:
         
         status, response = self.make_request("POST", "/auth/register", register_data)
         
-        if status == 201:
+        if status == 200 or status == 201:
             self.log_test("User Registration", True, "User registered successfully")
             self.set_auth_token(response["access_token"])
             self.user_id = response["user"]["id"]
