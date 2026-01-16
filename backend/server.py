@@ -591,11 +591,11 @@ async def add_proxy(
     proxy_dict = proxy_obj.model_dump()
     proxy_dict['created_at'] = proxy_dict['created_at'].isoformat()
     
-    result = await db.proxies.insert_one(proxy_dict)
+    # Insert without returning the MongoDB _id
+    await db.proxies.insert_one(proxy_dict.copy())
     
-    # Return the proxy without MongoDB's _id field
-    return_dict = {k: v for k, v in proxy_dict.items()}
-    return return_dict
+    # Return clean proxy dict without _id
+    return proxy_dict
 
 @api_router.get("/proxies")
 async def get_proxies(
