@@ -737,6 +737,25 @@ const Verifier = () => {
               </div>
               <Progress value={jobProgress.progress_percentage} className="mb-4" />
               
+              {/* Live Counter - Current email being processed */}
+              {jobStatus === 'processing' && jobProgress.current_email && (
+                <div className="mb-4 p-3 bg-indigo-600/10 rounded-md border border-indigo-600/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-indigo-600 animate-pulse" />
+                      <span className="text-sm font-medium text-indigo-600">Currently Checking:</span>
+                    </div>
+                    <span className="text-sm font-mono text-indigo-600">{jobProgress.current_email}</span>
+                  </div>
+                  {jobProgress.processing_rate > 0 && (
+                    <div className="mt-2 text-xs text-muted-foreground flex items-center justify-end gap-1">
+                      <TrendingUp className="w-3 h-3" />
+                      Processing at {jobProgress.processing_rate} emails/sec
+                    </div>
+                  )}
+                </div>
+              )}
+              
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-center mb-4">
                 <div className="p-3 bg-green-600/10 rounded-md border border-green-600/20">
                   <p className="text-2xl font-bold text-green-600">{jobProgress.valid_count}</p>
