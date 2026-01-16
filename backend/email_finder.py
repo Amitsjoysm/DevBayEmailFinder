@@ -57,30 +57,47 @@ class EmailFinder:
         return score
     
     def generate_email_variants(self, first_name: str, last_name: str, domain: str, patterns: Optional[List[str]] = None) -> List[str]:
-        """Generate email variants based on patterns"""
+        """Generate email variants based on patterns - ALWAYS checks in priority order"""
         first = first_name.lower().strip()
         last = last_name.lower().strip()
         f = first[0] if first else ''
         l = last[0] if last else ''
         
-        # Check if we have a successful pattern cached for this domain
-        if domain in self.domain_patterns:
-            cached_pattern = self.domain_patterns[domain]
-            try:
-                email = cached_pattern.format(first=first, last=last, f=f, l=l, domain=domain)
-                return [email]  # Return cached pattern first
-            except:
-                pass
-        
         use_patterns = patterns if patterns else EMAIL_PATTERNS
         emails = []
         
-        for pattern in use_patterns:
+        # CRITICAL FIX: Always check patterns in order, prioritizing cached pattern
+        # but never excluding other patterns to ensure first.last@domain is checked before first@domain
+        cached_pattern = None
+        if domain in self.domain_patterns:
+            cached_pattern = self.domain_patterns[domain]
+        
+        # If we have a cached pattern, put it first, then all others in order
+        if cached_pattern and cached_pattern in use_patterns:
+            # Add cached pattern first
             try:
-                email = pattern.format(first=first, last=last, f=f, l=l, domain=domain)
+                email = cached_pattern.format(first=first, last=last, f=f, l=l, domain=domain)
                 emails.append(email)
             except KeyError:
-                continue
+                pass
+            
+            # Then add all other patterns in their original order
+            for pattern in use_patterns:
+                if pattern != cached_pattern:  # Skip the cached one we already added
+                    try:
+                        email = pattern.format(first=first, last=last, f=f, l=l, domain=domain)
+                        if email not in emails:  # Avoid duplicates
+                            emails.append(email)
+                    except KeyError:
+                        continue
+        else:
+            # No cache or cache not in patterns, use standard order
+            for pattern in use_patterns:
+                try:
+                    email = pattern.format(first=first, last=last, f=f, l=l, domain=domain)
+                    emails.append(email)
+                except KeyError:
+                    continue
         
         return emails
     
