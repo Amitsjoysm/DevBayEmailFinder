@@ -53,6 +53,7 @@ const Finder = () => {
   const handleJobProgress = (data) => {
     if (data.job_id === currentJob) {
       setJobProgress(data);
+      setJobStatus(data.status);
     }
   };
 
