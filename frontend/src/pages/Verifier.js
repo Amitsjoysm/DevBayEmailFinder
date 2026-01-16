@@ -162,11 +162,50 @@ const Verifier = () => {
     if (file) {
       if (!file.name.endsWith('.csv')) {
         toast.error('Please upload a CSV file');
+        setCsvValidationError('File must be a CSV file');
         return;
       }
-      setBulkFile(file);
-      toast.success(`File "${file.name}" loaded`);
+      
+      // Validate CSV structure
+      Papa.parse(file, {
+        header: true,
+        preview: 5,
+        complete: (results) => {
+          const headers = results.meta.fields || [];
+          const hasEmailColumn = headers.some(h => 
+            h.toLowerCase() === 'email' || 
+            h.toLowerCase() === 'emails'
+          );
+          
+          if (!hasEmailColumn) {
+            toast.error('CSV must contain an "email" column');
+            setCsvValidationError('CSV must have an "email" column header');
+            setBulkFile(null);
+            return;
+          }
+          
+          setCsvValidationError(null);
+          setBulkFile(file);
+          toast.success(`File "${file.name}" loaded successfully with ${results.data.length}+ rows`);
+        },
+        error: (error) => {
+          toast.error('Failed to parse CSV file');
+          setCsvValidationError(error.message);
+        }
+      });
     }
+  };
+  
+  const downloadSampleCSV = () => {
+    const csvContent = 'email\ntest@example.com\nuser@company.com\njohn.doe@organization.org';
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sample_verification.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Sample CSV downloaded!');
   };
 
   const startBulkVerification = async () => {
