@@ -65,7 +65,68 @@ const Verifier = () => {
   const handleJobCompleted = (data) => {
     toast.success('Verification completed!');
     setBulkProcessing(false);
+    setJobStatus('completed');
     loadResults(data.job_id);
+  };
+
+  const pauseJob = async () => {
+    if (!currentJob) return;
+    
+    try {
+      await jobApi.pause(currentJob);
+      setJobStatus('paused');
+      toast.success('Job paused');
+    } catch (error) {
+      toast.error('Failed to pause job');
+    }
+  };
+
+  const resumeJob = async () => {
+    if (!currentJob) return;
+    
+    try {
+      await jobApi.resume(currentJob);
+      setJobStatus('processing');
+      toast.success('Job resumed');
+    } catch (error) {
+      toast.error('Failed to resume job');
+    }
+  };
+
+  const stopJob = async () => {
+    if (!currentJob) return;
+    
+    try {
+      await jobApi.stop(currentJob);
+      setJobStatus('stopped');
+      setBulkProcessing(false);
+      toast.success('Job stopped');
+    } catch (error) {
+      toast.error('Failed to stop job');
+    }
+  };
+
+  const retryFailedVerifications = async () => {
+    if (!currentJob) {
+      toast.error('No job to retry');
+      return;
+    }
+
+    setRetrying(true);
+
+    try {
+      await jobApi.retry(currentJob);
+      toast.success('Retrying failed verifications...');
+      
+      // Reload results after a delay
+      setTimeout(() => {
+        loadResults(currentJob);
+        setRetrying(false);
+      }, 3000);
+    } catch (error) {
+      toast.error('Failed to retry verifications');
+      setRetrying(false);
+    }
   };
 
   const verifySingle = async () => {
