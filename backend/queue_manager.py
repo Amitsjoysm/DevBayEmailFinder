@@ -171,7 +171,8 @@ class VerificationQueue:
                     'verified_at': result.get('verified_at', datetime.now(timezone.utc)).isoformat() if isinstance(result.get('verified_at'), datetime) else result.get('verified_at'),
                     'retry_count': result.get('retry_count', 0),
                     'max_retry_attempts': settings.get('max_retries', 3),
-                    'error_message': result.get('error_message')
+                    'error_message': result.get('error_message'),
+                    'deliverability_score': result.get('deliverability_score', 0)
                 }
                 
                 await self.db.verification_results.insert_one(result_doc)
@@ -266,7 +267,8 @@ class VerificationQueue:
                     'patterns_tested': result.get('patterns_tested', 0),
                     'search_time': result.get('search_time', 0),
                     'verified_at': datetime.now(timezone.utc).isoformat(),
-                    'error_message': result.get('error_message')
+                    'error_message': result.get('error_message'),
+                    'deliverability_score': result.get('deliverability_score', 0)
                 }
                 
                 # Add verification details if email was found
