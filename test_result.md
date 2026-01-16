@@ -201,11 +201,14 @@ backend:
     file: "queue_manager.py, email_verifier.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "partial"
         agent: "main"
         comment: "Proxy CRUD endpoints exist but proxy rotation not implemented in verifier"
+      - working: "partial"
+        agent: "testing"
+        comment: "TESTED: Proxy endpoints have ObjectId serialization issue. GET /api/proxies works, but POST /api/proxies fails with MongoDB ObjectId JSON serialization error. Minor backend fix needed for proxy creation."
 
   - task: "Job Management (Pause/Resume/Stop)"
     implemented: true
