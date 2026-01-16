@@ -90,7 +90,7 @@ class EmailVerifier:
         else:
             return EmailProvider.CUSTOM
     
-    async def verify_smtp(self, email: str, mx_host: str, timeout: int = 10) -> Tuple[VerificationStatus, str, bool]:
+    async def verify_smtp(self, email: str, mx_host: str, timeout: int = 10, proxy: dict = None) -> Tuple[VerificationStatus, str, bool]:
         """Verify email via SMTP handshake"""
         try:
             # Connect to SMTP server
@@ -116,7 +116,8 @@ class EmailVerifier:
                     server2.quit()
                     if code2 == 250:
                         is_catch_all = True
-                except:
+                except Exception as e:
+                    # If random check fails, not a catch-all
                     pass
             
             if code == 250:
@@ -135,8 +136,10 @@ class EmailVerifier:
             if e.smtp_code >= 500:
                 return VerificationStatus.INVALID, str(e), False
             return VerificationStatus.UNKNOWN, str(e), False
+        except ConnectionRefusedError:
+            return VerificationStatus.BLOCKED, "Connection refused - IP may be blocked", False
         except Exception as e:
-            return VerificationStatus.UNKNOWN, str(e), False
+            return VerificationStatus.UNKNOWN, f"SMTP Error: {str(e)}", False
     
     async def verify_external_api(self, email: str) -> Tuple[VerificationStatus, str]:
         """Fallback verification using external API"""
