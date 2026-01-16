@@ -948,6 +948,7 @@ const Verifier = () => {
                       <TableRow className="border-border/50">
                         <TableHead className="font-bold uppercase text-xs tracking-wider">Email</TableHead>
                         <TableHead className="font-bold uppercase text-xs tracking-wider">Status</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Score</TableHead>
                         <TableHead className="font-bold uppercase text-xs tracking-wider">Provider</TableHead>
                         <TableHead className="font-bold uppercase text-xs tracking-wider">Response Time</TableHead>
                         <TableHead className="font-bold uppercase text-xs tracking-wider">Retry Count</TableHead>
@@ -959,6 +960,7 @@ const Verifier = () => {
                         <TableRow key={result.id} className="border-border/50">
                           <TableCell className="font-mono text-sm">{result.email}</TableCell>
                           <TableCell>{getStatusBadge(result.status)}</TableCell>
+                          <TableCell>{getDeliverabilityScoreBadge(result.deliverability_score || 0)}</TableCell>
                           <TableCell>{getProviderBadge(result.provider)}</TableCell>
                           <TableCell className="font-mono text-sm">
                             {result.response_time ? (result.response_time * 1000).toFixed(0) : '0'}ms
