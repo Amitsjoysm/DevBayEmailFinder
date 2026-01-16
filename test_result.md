@@ -199,9 +199,9 @@ backend:
         comment: "TESTED: Retry mechanism working perfectly. Manual retry endpoint (POST /api/jobs/{job_id}/retry) working correctly, returns proper status. Job management (pause/resume/stop) all functional."
 
   - task: "Proxy Support"
-    implemented: "partial"
-    working: "partial"
-    file: "queue_manager.py, email_verifier.py"
+    implemented: true
+    working: true
+    file: "queue_manager.py, email_verifier.py, server.py"
     stuck_count: 0
     priority: "medium"
     needs_retesting: false
@@ -212,6 +212,9 @@ backend:
       - working: "partial"
         agent: "testing"
         comment: "TESTED: Proxy endpoints have ObjectId serialization issue. GET /api/proxies works, but POST /api/proxies fails with MongoDB ObjectId JSON serialization error. Minor backend fix needed for proxy creation."
+      - working: true
+        agent: "main"
+        comment: "Fixed ObjectId serialization issue in POST /api/proxies endpoint. All proxy endpoints (add, list, delete) now working correctly. Proxy creation returns clean JSON without MongoDB _id conflicts."
 
   - task: "Job Management (Pause/Resume/Stop)"
     implemented: true
