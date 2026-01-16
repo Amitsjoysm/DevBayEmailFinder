@@ -385,6 +385,31 @@ async def stop_job(
     await queue_manager.stop_job(job_id)
     return {"status": "stopped"}
 
+@api_router.post("/jobs/{job_id}/retry")
+async def retry_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
+):
+    """Retry all failed/unknown verifications in a job"""
+    # Verify job ownership
+    job = await db.verification_jobs.find_one(
+        {"id": job_id, "user_id": current_user['id']},
+        {"_id": 0}
+    )
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Start retry in background
+    background_tasks.add_task(
+        queue_manager.retry_failed_verifications,
+        job_id,
+        current_user['id']
+    )
+    
+    return {"status": "retry_started", "job_id": job_id}
+
 # Results endpoints
 @api_router.get("/results/{job_id}")
 async def get_results(
