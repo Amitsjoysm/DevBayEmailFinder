@@ -296,6 +296,7 @@ const Finder = () => {
       const response = await finderApi.upload(bulkFile, threads[0]);
       setCurrentJob(response.data.job_id);
       toast.success(`Finding emails for ${response.data.total_records} records`);
+      loadJobHistory(); // Refresh job history
     } catch (error) {
       toast.error('Failed to start bulk finder');
       console.error(error);
