@@ -58,6 +58,7 @@ api_router = APIRouter(prefix="/api")
 verifier = EmailVerifier()
 finder = EmailFinder()
 queue_manager = VerificationQueue(db, sio)
+ledger_service = LedgerService(db)
 
 # Socket.IO events
 @sio.event
