@@ -10,8 +10,9 @@ import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Slider } from '../components/ui/slider';
-import { Search, Upload, CheckCircle, XCircle, Clock, Loader2, Download, Play, Pause, Square, AlertTriangle } from 'lucide-react';
+import { Search, Upload, CheckCircle, XCircle, Clock, Loader2, Download, Play, Pause, Square, AlertTriangle, FileText, HelpCircle, Info, TrendingUp, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { toast } from 'sonner';
+import Papa from 'papaparse';
 import Layout from '../components/Layout';
 
 const Finder = () => {
@@ -32,6 +33,14 @@ const Finder = () => {
   const [jobProgress, setJobProgress] = useState(null);
   const [finderResults, setFinderResults] = useState([]);
   const [jobStatus, setJobStatus] = useState(null);
+  
+  // UI states
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [csvValidationError, setCsvValidationError] = useState(null);
+  const [loadingResults, setLoadingResults] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalResults, setTotalResults] = useState(0);
+  const [pageSize] = useState(50);
 
   useEffect(() => {
     const socket = getSocket();
@@ -66,7 +75,7 @@ const Finder = () => {
       toast.success('Email finding completed!');
       setBulkProcessing(false);
       setJobStatus('completed');
-      loadFinderResults(data.job_id);
+      loadFinderResults(data.job_id, 0);
     }
   };
 
@@ -141,11 +150,55 @@ const Finder = () => {
     if (file) {
       if (!file.name.endsWith('.csv')) {
         toast.error('Please upload a CSV file');
+        setCsvValidationError('File must be a CSV file');
         return;
       }
-      setBulkFile(file);
-      toast.success(`File "${file.name}" loaded`);
+      
+      // Validate CSV structure
+      Papa.parse(file, {
+        header: true,
+        preview: 5,
+        complete: (results) => {
+          const headers = results.meta.fields || [];
+          const hasFirstName = headers.some(h => 
+            h.toLowerCase().includes('first') && h.toLowerCase().includes('name')
+          );
+          const hasLastName = headers.some(h => 
+            h.toLowerCase().includes('last') && h.toLowerCase().includes('name')
+          );
+          const hasDomain = headers.some(h => 
+            h.toLowerCase() === 'domain' || h.toLowerCase().includes('company')
+          );
+          
+          if (!hasFirstName || !hasLastName || !hasDomain) {
+            toast.error('CSV must contain first_name, last_name, and domain columns');
+            setCsvValidationError('CSV must have first_name, last_name, and domain columns');
+            setBulkFile(null);
+            return;
+          }
+          
+          setCsvValidationError(null);
+          setBulkFile(file);
+          toast.success(`File "${file.name}" loaded successfully with ${results.data.length}+ rows`);
+        },
+        error: (error) => {
+          toast.error('Failed to parse CSV file');
+          setCsvValidationError(error.message);
+        }
+      });
     }
+  };
+
+  const downloadSampleCSV = () => {
+    const csvContent = 'first_name,last_name,domain\nJohn,Doe,example.com\nJane,Smith,company.com\nMike,Johnson,organization.org';
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sample_finder.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Sample CSV downloaded!');
   };
 
   const startBulkFinder = async () => {
@@ -190,12 +243,18 @@ const Finder = () => {
     );
   };
 
-  const loadFinderResults = async (jobId) => {
+  const loadFinderResults = async (jobId, page = 0) => {
+    setLoadingResults(true);
     try {
-      const response = await resultsApi.getFinder(jobId, 0, 100);
+      const response = await resultsApi.getFinder(jobId, page * pageSize, pageSize);
       setFinderResults(response.data.results);
+      setTotalResults(response.data.total);
+      setCurrentPage(page);
     } catch (error) {
       console.error('Failed to load finder results:', error);
+      toast.error('Failed to load results');
+    } finally {
+      setLoadingResults(false);
     }
   };
 
@@ -307,7 +366,7 @@ const Finder = () => {
                     </div>
                     <div>
                       <p className="text-muted-foreground mb-1">Search Time</p>
-                      <p className="font-bold">{result.search_time.toFixed(2)}s</p>
+                      <p className="font-bold">{result.search_time?.toFixed(2) || 0}s</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground mb-1">Name</p>
@@ -322,7 +381,7 @@ const Finder = () => {
                     <span className="text-lg font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>No Valid Email Found</span>
                   </div>
                   <p className="text-muted-foreground mb-4">
-                    Tested {result.patterns_tested} patterns in {result.search_time.toFixed(2)}s but couldn't find a valid email.
+                    Tested {result.patterns_tested} patterns in {result.search_time?.toFixed(2) || 0}s but couldn't find a valid email.
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Try different name variations or check if the domain is correct.
@@ -335,10 +394,47 @@ const Finder = () => {
 
         {/* Bulk Email Finder */}
         <Card className="bg-surface border border-border/50 p-6">
-          <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Chivo, sans-serif' }}>Bulk Email Finder</h2>
-          <p className="text-sm text-muted-foreground mb-6">
-            Upload a CSV file with columns: <code className="bg-secondary/50 px-2 py-1 rounded">first_name</code>, <code className="bg-secondary/50 px-2 py-1 rounded">last_name</code>, <code className="bg-secondary/50 px-2 py-1 rounded">domain</code>
-          </p>
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h2 className="text-xl font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>Bulk Email Finder</h2>
+              <p className="text-sm text-muted-foreground mt-1">Upload CSV with first_name, last_name, and domain columns</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowInstructions(!showInstructions)}
+              className="hover:bg-secondary/80"
+            >
+              <HelpCircle className="w-4 h-4 mr-2" />
+              {showInstructions ? 'Hide' : 'Show'} Instructions
+            </Button>
+          </div>
+
+          {showInstructions && (
+            <div className="mb-6 p-4 bg-blue-600/10 border border-blue-600/20 rounded-md">
+              <h3 className="font-bold text-sm mb-2 flex items-center">
+                <Info className="w-4 h-4 mr-2 text-blue-600" />
+                CSV Format Instructions
+              </h3>
+              <ul className="text-sm text-muted-foreground space-y-1 ml-6 list-disc">
+                <li>CSV must contain three columns: <code className="bg-secondary px-1 py-0.5 rounded">first_name</code>, <code className="bg-secondary px-1 py-0.5 rounded">last_name</code>, <code className="bg-secondary px-1 py-0.5 rounded">domain</code></li>
+                <li>First row should be the header row</li>
+                <li>Domain should be without http:// or www (e.g., example.com)</li>
+                <li>Maximum recommended: 5,000 records per file</li>
+              </ul>
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadSampleCSV}
+                  className="hover:-translate-y-0.5 transition-transform"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Download Sample CSV
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
@@ -350,15 +446,25 @@ const Finder = () => {
                 data-testid="bulk-finder-file-input"
                 className="bg-secondary/50 border-border"
               />
-              {bulkFile && (
-                <p className="text-xs text-muted-foreground mt-2">
+              {bulkFile && !csvValidationError && (
+                <p className="text-xs text-green-600 mt-2 flex items-center">
+                  <CheckCircle className="w-3 h-3 mr-1" />
                   Selected: {bulkFile.name}
+                </p>
+              )}
+              {csvValidationError && (
+                <p className="text-xs text-red-600 mt-2 flex items-center">
+                  <XCircle className="w-3 h-3 mr-1" />
+                  {csvValidationError}
                 </p>
               )}
             </div>
 
             <div>
-              <Label className="mb-2 block">Threads: {threads[0]}</Label>
+              <Label className="mb-2 block flex items-center">
+                Threads: {threads[0]}
+                <span className="ml-2 text-xs text-muted-foreground">(Concurrent searches)</span>
+              </Label>
               <Slider
                 data-testid="finder-threads-slider"
                 value={threads}
@@ -368,22 +474,67 @@ const Finder = () => {
                 step={1}
                 className="w-full"
               />
-              <p className="text-xs text-muted-foreground mt-2">
-                Higher threads = faster processing but more server load
-              </p>
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               data-testid="start-bulk-finder-button"
               onClick={startBulkFinder}
-              disabled={bulkProcessing || !bulkFile}
+              disabled={bulkProcessing || !bulkFile || csvValidationError}
               className="bg-blue-600 hover:bg-blue-700 hover:-translate-y-0.5 transition-transform"
+              title="Start bulk email finding"
             >
-              <Play className="w-4 h-4 mr-2" />
-              Start Finding
+              {bulkProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Finding...
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 mr-2" />
+                  Start Finding
+                </>
+              )}
             </Button>
+            
+            {currentJob && jobStatus === 'processing' && (
+              <>
+                <Button
+                  data-testid="pause-finder-button"
+                  onClick={pauseJob}
+                  variant="outline"
+                  className="hover:-translate-y-0.5 transition-transform"
+                  title="Pause the current job"
+                >
+                  <Pause className="w-4 h-4 mr-2" />
+                  Pause
+                </Button>
+                <Button
+                  data-testid="stop-finder-button"
+                  onClick={stopJob}
+                  variant="destructive"
+                  className="hover:-translate-y-0.5 transition-transform"
+                  title="Stop the current job"
+                >
+                  <Square className="w-4 h-4 mr-2" />
+                  Stop
+                </Button>
+              </>
+            )}
+            
+            {currentJob && jobStatus === 'paused' && (
+              <Button
+                data-testid="resume-finder-button"
+                onClick={resumeJob}
+                className="bg-green-600 hover:bg-green-700 hover:-translate-y-0.5 transition-transform"
+                title="Resume the paused job"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Resume
+              </Button>
+            )}
+            
             {currentJob && (
               <>
                 <Button
@@ -391,6 +542,7 @@ const Finder = () => {
                   onClick={() => exportResults('csv')}
                   variant="outline"
                   className="hover:-translate-y-0.5 transition-transform"
+                  title="Export results as CSV"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Export CSV
@@ -400,6 +552,7 @@ const Finder = () => {
                   onClick={() => exportResults('json')}
                   variant="outline"
                   className="hover:-translate-y-0.5 transition-transform"
+                  title="Export results as JSON"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Export JSON
@@ -410,117 +563,179 @@ const Finder = () => {
 
           {jobProgress && (
             <div className="mt-6 p-4 bg-secondary/30 rounded-md border border-border/30" data-testid="finder-job-progress">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium">Progress</span>
-                <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {jobProgress.processed_records}/{jobProgress.total_records}
-                </span>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Job Status:</span>
+                  {getJobStatusBadge(jobStatus)}
+                  {jobStatus === 'processing' && (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  )}
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-mono">
+                    {jobProgress.processed_records}/{jobProgress.total_records}
+                  </span>
+                  <p className="text-xs text-muted-foreground">
+                    {jobProgress.progress_percentage?.toFixed(1)}% Complete
+                  </p>
+                </div>
               </div>
               <Progress value={jobProgress.progress_percentage} className="mb-4" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mb-4">
+                <div className="p-3 bg-green-600/10 rounded-md border border-green-600/20">
                   <p className="text-2xl font-bold text-green-600">{jobProgress.found_count || 0}</p>
                   <p className="text-xs text-muted-foreground">Found</p>
                 </div>
-                <div>
+                <div className="p-3 bg-red-600/10 rounded-md border border-red-600/20">
                   <p className="text-2xl font-bold text-red-600">{jobProgress.not_found_count || 0}</p>
                   <p className="text-xs text-muted-foreground">Not Found</p>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-600">{jobProgress.error_count || 0}</p>
-                  <p className="text-xs text-muted-foreground">Errors</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-blue-600">{jobProgress.active_threads}</p>
+                <div className="p-3 bg-blue-600/10 rounded-md border border-blue-600/20">
+                  <p className="text-2xl font-bold text-blue-600">{jobProgress.active_threads || 0}</p>
                   <p className="text-xs text-muted-foreground">Active Threads</p>
                 </div>
+                <div className="p-3 bg-purple-600/10 rounded-md border border-purple-600/20">
+                  <p className="text-2xl font-bold text-purple-600">
+                    {jobProgress.found_count > 0 && jobProgress.processed_records > 0
+                      ? ((jobProgress.found_count / jobProgress.processed_records) * 100).toFixed(1)
+                      : '0'}%
+                  </p>
+                  <p className="text-xs text-muted-foreground flex items-center justify-center">
+                    <TrendingUp className="w-3 h-3 mr-1" />
+                    Success Rate
+                  </p>
+                </div>
               </div>
-              {jobProgress.eta_seconds && (
-                <p className="text-center text-sm text-muted-foreground mt-4">
-                  ETA: {Math.floor(jobProgress.eta_seconds / 60)}m {jobProgress.eta_seconds % 60}s
-                </p>
+              
+              {jobProgress.error_count > 0 && (
+                <div className="mt-3 p-3 bg-red-600/10 rounded-md border border-red-600/20">
+                  <p className="text-sm text-red-600">
+                    <AlertTriangle className="w-4 h-4 inline mr-1" />
+                    {jobProgress.error_count} errors occurred during processing
+                  </p>
+                </div>
+              )}
+              
+              {jobProgress.eta_seconds && jobStatus === 'processing' && (
+                <div className="mt-3 p-3 bg-blue-600/10 rounded-md border border-blue-600/20">
+                  <p className="text-sm text-blue-600 flex items-center justify-center">
+                    <Clock className="w-4 h-4 mr-2" />
+                    Estimated time remaining: {Math.floor(jobProgress.eta_seconds / 60)}m {jobProgress.eta_seconds % 60}s
+                  </p>
+                </div>
               )}
             </div>
           )}
         </Card>
 
         {/* Results Table */}
-        {finderResults.length > 0 && (
+        {currentJob && (
           <Card className="bg-surface border border-border/50 p-6">
-            <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Chivo, sans-serif' }}>Recent Results</h2>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border/50">
-                    <TableHead className="font-bold uppercase text-xs tracking-wider">Name</TableHead>
-                    <TableHead className="font-bold uppercase text-xs tracking-wider">Domain</TableHead>
-                    <TableHead className="font-bold uppercase text-xs tracking-wider">Status</TableHead>
-                    <TableHead className="font-bold uppercase text-xs tracking-wider">Email</TableHead>
-                    <TableHead className="font-bold uppercase text-xs tracking-wider">Time</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {finderResults.slice(0, 20).map((result) => (
-                    <TableRow key={result.id} className="border-border/50">
-                      <TableCell className="font-medium">
-                        {result.first_name} {result.last_name}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{result.domain}</TableCell>
-                      <TableCell>
-                        {result.found ? (
-                          <Badge className="bg-green-600/10 text-green-600 border-green-600/20 border">
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Found
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-red-600/10 text-red-600 border-red-600/20 border">
-                            <XCircle className="w-3 h-3 mr-1" />
-                            Not Found
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {result.email || '-'}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {result.search_time ? `${result.search_time.toFixed(2)}s` : '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-xl font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>Finder Results</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Showing {finderResults.length} of {totalResults} results
+                </p>
+              </div>
             </div>
+            
+            {loadingResults ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                <span className="ml-3 text-muted-foreground">Loading results...</span>
+              </div>
+            ) : finderResults.length > 0 ? (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border/50">
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Name</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Domain</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Email Found</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Status</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Patterns Tested</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Search Time</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {finderResults.map((result) => (
+                        <TableRow key={result.id} className="border-border/50">
+                          <TableCell className="font-medium">
+                            {result.first_name} {result.last_name}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{result.domain}</TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {result.found ? (
+                              <span className="text-green-600">{result.email}</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {result.found ? (
+                              <Badge className="bg-green-600/10 text-green-600 border-green-600/20 border">
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                Found
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-red-600/10 text-red-600 border-red-600/20 border">
+                                <XCircle className="w-3 h-3 mr-1" />
+                                Not Found
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">{result.patterns_tested || 0}</TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {result.search_time ? result.search_time.toFixed(2) : '0.00'}s
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                
+                {totalResults > pageSize && (
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-muted-foreground">
+                      Page {currentPage + 1} of {Math.ceil(totalResults / pageSize)}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => loadFinderResults(currentJob, currentPage - 1)}
+                        disabled={currentPage === 0 || loadingResults}
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" />
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => loadFinderResults(currentJob, currentPage + 1)}
+                        disabled={currentPage >= Math.ceil(totalResults / pageSize) - 1 || loadingResults}
+                      >
+                        Next
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-12">
+                <Filter className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No results found</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Start a bulk finder job to see results here
+                </p>
+              </div>
+            )}
           </Card>
         )}
-
-        {/* Email Patterns Reference */}
-        <Card className="bg-surface border border-border/50 p-6">
-          <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Chivo, sans-serif' }}>Email Patterns We Test</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            We automatically test these 10 common patterns in order, stopping at the first valid email:
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {[
-              'first.last@domain.com',
-              'firstlast@domain.com',
-              'first@domain.com',
-              'last@domain.com',
-              'f.last@domain.com',
-              'firstl@domain.com',
-              'f.l@domain.com',
-              'first_last@domain.com',
-              'first-last@domain.com',
-              'lastf@domain.com'
-            ].map((pattern, index) => (
-              <div key={index} className="flex items-center space-x-2 p-3 bg-secondary/30 rounded-md border border-border/30">
-                <span className="text-xs font-bold text-muted-foreground w-6">{index + 1}</span>
-                <code className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {pattern}
-                </code>
-              </div>
-            ))}
-          </div>
-        </Card>
       </div>
     </Layout>
   );
