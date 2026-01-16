@@ -107,6 +107,10 @@ class VerificationResult(BaseModel):
     is_disposable: bool = False
     verified_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     retry_count: int = 0
+    max_retry_attempts: int = 3
+    last_retry_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    patterns_tested: Optional[int] = None
 
 class VerificationJob(BaseModel):
     model_config = ConfigDict(extra="ignore")
