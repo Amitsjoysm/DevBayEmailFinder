@@ -213,52 +213,169 @@ async def upload_verification_csv(
     delay: int = 0,
     current_user: dict = Depends(get_current_user)
 ):
-    # Read CSV
-    contents = await file.read()
-    csv_reader = csv.DictReader(io.StringIO(contents.decode('utf-8')))
-    
-    emails = []
-    for row in csv_reader:
-        # Try common column names
-        email = row.get('email') or row.get('Email') or row.get('EMAIL')
-        if email:
-            emails.append(email.strip())
-    
-    if not emails:
-        raise HTTPException(status_code=400, detail="No emails found in CSV")
-    
-    # Get user settings
-    settings_dict = await db.user_settings.find_one({"user_id": current_user['id']}, {"_id": 0})
-    if not settings_dict:
-        settings_dict = UserSettings(user_id=current_user['id']).model_dump()
-    
-    settings_dict['threads'] = threads
-    settings_dict['global_delay'] = delay
-    
-    # Create job
-    job = VerificationJob(
-        user_id=current_user['id'],
-        job_type="verification",
-        status=JobStatus.QUEUED,
-        total_records=len(emails),
-        settings=settings_dict
-    )
-    
-    job_dict = job.model_dump()
-    job_dict['created_at'] = job_dict['created_at'].isoformat()
-    
-    await db.verification_jobs.insert_one(job_dict)
-    
-    # Start processing in background
-    background_tasks.add_task(
-        queue_manager.start_verification_job,
-        job.id,
-        current_user['id'],
-        emails,
-        settings_dict
-    )
-    
-    return {"job_id": job.id, "status": "queued", "total_records": len(emails)}
+    """
+    Upload CSV for bulk verification with production-ready error handling
+    - Max 5000 records
+    - Comprehensive validation
+    - Error tracking
+    """
+    try:
+        # Validate file extension
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid file format. Only CSV files are allowed."
+            )
+        
+        # Read CSV with size limit (approx 5MB for 5K records)
+        max_size = 5 * 1024 * 1024  # 5MB
+        contents = await file.read()
+        
+        if len(contents) > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail="File too large. Maximum file size is 5MB (approximately 5000 records)."
+            )
+        
+        if len(contents) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Empty file. Please upload a CSV with email addresses."
+            )
+        
+        # Parse CSV with error handling
+        try:
+            csv_content = contents.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                csv_content = contents.decode('latin-1')
+            except Exception:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unable to decode file. Please ensure it's a valid UTF-8 or Latin-1 encoded CSV."
+                )
+        
+        # Validate CSV structure
+        try:
+            csv_reader = csv.DictReader(io.StringIO(csv_content))
+            
+            # Check if required column exists
+            if csv_reader.fieldnames is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid CSV format. File appears to be empty or corrupted."
+                )
+            
+            has_email_column = any(
+                col.lower().strip() in ['email', 'e-mail', 'emails'] 
+                for col in csv_reader.fieldnames
+            )
+            
+            if not has_email_column:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"CSV must contain an 'email' column. Found columns: {', '.join(csv_reader.fieldnames)}"
+                )
+            
+        except csv.Error as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV parsing error: {str(e)}. Please ensure proper CSV formatting."
+            )
+        
+        # Extract emails with validation
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+        emails = []
+        invalid_rows = []
+        
+        for idx, row in enumerate(csv_reader, start=2):  # Start at 2 (header is row 1)
+            try:
+                # Try common column names
+                email = row.get('email') or row.get('Email') or row.get('EMAIL') or row.get('e-mail') or row.get('E-mail')
+                
+                if email and email.strip():
+                    email_clean = email.strip()
+                    
+                    # Basic email format validation
+                    if '@' in email_clean and '.' in email_clean.split('@')[-1]:
+                        emails.append(email_clean)
+                    else:
+                        invalid_rows.append(f"Row {idx}: Invalid email format '{email_clean}'")
+                        
+            except Exception as e:
+                invalid_rows.append(f"Row {idx}: Error processing row - {str(e)}")
+                continue
+            
+            # Stop at 5000 records limit
+            if len(emails) >= 5000:
+                logging.warning(f"CSV contains more than 5000 records. Processing first 5000 only.")
+                break
+        
+        if not emails:
+            error_msg = "No valid emails found in CSV."
+            if invalid_rows:
+                error_msg += f" Issues found:\n" + "\n".join(invalid_rows[:10])
+                if len(invalid_rows) > 10:
+                    error_msg += f"\n... and {len(invalid_rows) - 10} more errors"
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        # Log warnings for invalid rows
+        if invalid_rows:
+            logging.warning(f"Found {len(invalid_rows)} invalid rows in CSV upload by user {current_user['id']}")
+        
+        # Get user settings
+        settings_dict = await db.user_settings.find_one({"user_id": current_user['id']}, {"_id": 0})
+        if not settings_dict:
+            settings_dict = UserSettings(user_id=current_user['id']).model_dump()
+        
+        settings_dict['threads'] = min(threads, 100)  # Cap at 100
+        settings_dict['global_delay'] = max(0, min(delay, 30))  # 0-30 seconds
+        
+        # Create job
+        job = VerificationJob(
+            user_id=current_user['id'],
+            job_type="verification",
+            status=JobStatus.QUEUED,
+            total_records=len(emails),
+            settings=settings_dict
+        )
+        
+        job_dict = job.model_dump()
+        job_dict['created_at'] = job_dict['created_at'].isoformat()
+        
+        await db.verification_jobs.insert_one(job_dict)
+        
+        # Start processing in background
+        background_tasks.add_task(
+            queue_manager.start_verification_job,
+            job.id,
+            current_user['id'],
+            emails,
+            settings_dict
+        )
+        
+        response = {
+            "job_id": job.id, 
+            "status": "queued", 
+            "total_records": len(emails)
+        }
+        
+        if invalid_rows:
+            response["warnings"] = {
+                "invalid_rows_count": len(invalid_rows),
+                "message": f"Skipped {len(invalid_rows)} invalid rows. Processing {len(emails)} valid emails."
+            }
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error in CSV upload: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Server error while processing CSV: {str(e)}"
+        )
 
 # Email finder endpoints
 @api_router.post("/find/single")
