@@ -679,10 +679,15 @@ const Verifier = () => {
           )}
         </Card>
 
-        {results.length > 0 && (
+        {currentJob && (
           <Card className="bg-surface border border-border/50 p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>Recent Results</h2>
+              <div>
+                <h2 className="text-xl font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>Verification Results</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Showing {results.length} of {totalResults} results
+                </p>
+              </div>
               <div className="flex gap-2">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-[150px]" data-testid="status-filter">
@@ -716,34 +721,103 @@ const Verifier = () => {
                 </Select>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border/50">
-                    <TableHead className="font-bold uppercase text-xs tracking-wider">Email</TableHead>
-                    <TableHead className="font-bold uppercase text-xs tracking-wider">Status</TableHead>
-                    <TableHead className="font-bold uppercase text-xs tracking-wider">Provider</TableHead>
-                    <TableHead className="font-bold uppercase text-xs tracking-wider">Response Time</TableHead>
-                    <TableHead className="font-bold uppercase text-xs tracking-wider">Details</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {results.slice(0, 20).map((result) => (
-                    <TableRow key={result.id} className="border-border/50">
-                      <TableCell className="font-mono text-sm">{result.email}</TableCell>
-                      <TableCell>{getStatusBadge(result.status)}</TableCell>
-                      <TableCell>{getProviderBadge(result.provider)}</TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {(result.response_time * 1000).toFixed(0)}ms
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
-                        {result.error_message || result.smtp_response || '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            
+            {loadingResults ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                <span className="ml-3 text-muted-foreground">Loading results...</span>
+              </div>
+            ) : results.length > 0 ? (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border/50">
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Email</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Status</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Provider</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Response Time</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Retry Count</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Details</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {results.map((result) => (
+                        <TableRow key={result.id} className="border-border/50">
+                          <TableCell className="font-mono text-sm">{result.email}</TableCell>
+                          <TableCell>{getStatusBadge(result.status)}</TableCell>
+                          <TableCell>{getProviderBadge(result.provider)}</TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {result.response_time ? (result.response_time * 1000).toFixed(0) : '0'}ms
+                          </TableCell>
+                          <TableCell>
+                            {result.retry_count > 0 ? (
+                              <Badge variant="outline" className="bg-orange-600/10 text-orange-600 border-orange-600/20">
+                                <RotateCw className="w-3 h-3 mr-1" />
+                                {result.retry_count}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-xs">
+                            <div className="space-y-1">
+                              <div className="truncate" title={result.error_message || result.smtp_response || '-'}>
+                                {result.error_message || result.smtp_response || '-'}
+                              </div>
+                              {result.last_retry_at && (
+                                <div className="text-xs text-blue-600 flex items-center">
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  Last retry: {new Date(result.last_retry_at).toLocaleString()}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                
+                {totalResults > pageSize && (
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-muted-foreground">
+                      Page {currentPage + 1} of {Math.ceil(totalResults / pageSize)}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => loadResults(currentJob, currentPage - 1)}
+                        disabled={currentPage === 0 || loadingResults}
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" />
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => loadResults(currentJob, currentPage + 1)}
+                        disabled={currentPage >= Math.ceil(totalResults / pageSize) - 1 || loadingResults}
+                      >
+                        Next
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-12">
+                <Filter className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No results found</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {statusFilter !== 'all' || providerFilter !== 'all' 
+                    ? 'Try adjusting your filters' 
+                    : 'Start a verification to see results here'}
+                </p>
+              </div>
+            )}
           </Card>
         )}
       </div>
