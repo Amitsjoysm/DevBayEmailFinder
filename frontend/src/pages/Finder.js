@@ -10,7 +10,7 @@ import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Slider } from '../components/ui/slider';
-import { Search, Upload, CheckCircle, XCircle, Clock, Loader2, Download, Play } from 'lucide-react';
+import { Search, Upload, CheckCircle, XCircle, Clock, Loader2, Download, Play, Pause, Square, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout from '../components/Layout';
 
