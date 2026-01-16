@@ -240,6 +240,7 @@ const Verifier = () => {
       risky: { variant: 'secondary', className: 'bg-yellow-600/10 text-yellow-600 border-yellow-600/20', icon: AlertTriangle },
       unknown: { variant: 'secondary', className: 'bg-gray-600/10 text-gray-600 border-gray-600/20', icon: AlertTriangle },
       disposable: { variant: 'destructive', className: 'bg-orange-600/10 text-orange-600 border-orange-600/20', icon: XCircle },
+      blocked: { variant: 'destructive', className: 'bg-red-700/10 text-red-700 border-red-700/20', icon: XCircle },
     };
 
     const config = statusConfig[status] || statusConfig.unknown;
@@ -249,6 +250,25 @@ const Verifier = () => {
       <Badge className={`${config.className} border`}>
         <Icon className="w-3 h-3 mr-1" />
         {status}
+      </Badge>
+    );
+  };
+
+  const getJobStatusBadge = (status) => {
+    const statusConfig = {
+      queued: { className: 'bg-blue-600/10 text-blue-600 border-blue-600/20', label: 'Queued' },
+      processing: { className: 'bg-green-600/10 text-green-600 border-green-600/20', label: 'Processing' },
+      paused: { className: 'bg-yellow-600/10 text-yellow-600 border-yellow-600/20', label: 'Paused' },
+      completed: { className: 'bg-gray-600/10 text-gray-600 border-gray-600/20', label: 'Completed' },
+      stopped: { className: 'bg-red-600/10 text-red-600 border-red-600/20', label: 'Stopped' },
+      failed: { className: 'bg-red-700/10 text-red-700 border-red-700/20', label: 'Failed' },
+    };
+
+    const config = statusConfig[status] || statusConfig.queued;
+
+    return (
+      <Badge className={`${config.className} border`}>
+        {config.label}
       </Badge>
     );
   };
