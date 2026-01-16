@@ -52,47 +52,71 @@ class EmailFinder:
     
     async def find_email(self, first_name: str, last_name: str, domain: str, 
                         patterns: Optional[List[str]] = None, 
-                        stop_on_first_valid: bool = True) -> dict:
+                        stop_on_first_valid: bool = True,
+                        proxy: dict = None) -> dict:
         """Find and verify email using pattern matching"""
         start_time = time.time()
         
-        emails = self.generate_email_variants(first_name, last_name, domain, patterns)
-        
-        results = []
-        found_email = None
-        
-        for email in emails:
-            verification_result = await self.verifier.verify_email(email, use_api_fallback=True)
-            results.append(verification_result)
+        try:
+            emails = self.generate_email_variants(first_name, last_name, domain, patterns)
             
-            if verification_result['status'] == VerificationStatus.VALID:
-                found_email = email
-                # Cache successful pattern for this domain
-                for pattern in EMAIL_PATTERNS:
-                    try:
-                        test_email = pattern.format(
-                            first=first_name.lower(), 
-                            last=last_name.lower(), 
-                            f=first_name[0].lower(), 
-                            l=last_name[0].lower(), 
-                            domain=domain
-                        )
-                        if test_email == email:
-                            self.domain_patterns[domain] = pattern
+            results = []
+            found_email = None
+            
+            for email in emails:
+                try:
+                    verification_result = await self.verifier.verify_email(email, use_api_fallback=True, proxy=proxy)
+                    results.append(verification_result)
+                    
+                    if verification_result['status'] == VerificationStatus.VALID:
+                        found_email = email
+                        # Cache successful pattern for this domain
+                        for pattern in EMAIL_PATTERNS:
+                            try:
+                                test_email = pattern.format(
+                                    first=first_name.lower(), 
+                                    last=last_name.lower(), 
+                                    f=first_name[0].lower(), 
+                                    l=last_name[0].lower(), 
+                                    domain=domain
+                                )
+                                if test_email == email:
+                                    self.domain_patterns[domain] = pattern
+                                    break
+                            except:
+                                continue
+                        
+                        if stop_on_first_valid:
                             break
-                    except:
-                        continue
-                
-                if stop_on_first_valid:
-                    break
-        
-        return {
-            'found': found_email is not None,
-            'email': found_email,
-            'first_name': first_name,
-            'last_name': last_name,
-            'domain': domain,
-            'patterns_tested': len(results),
-            'all_results': results,
-            'search_time': time.time() - start_time
-        }
+                except Exception as e:
+                    # Continue to next pattern on error
+                    results.append({
+                        'email': email,
+                        'status': VerificationStatus.UNKNOWN,
+                        'error_message': str(e)
+                    })
+                    continue
+            
+            return {
+                'found': found_email is not None,
+                'email': found_email,
+                'first_name': first_name,
+                'last_name': last_name,
+                'domain': domain,
+                'patterns_tested': len(results),
+                'all_results': results,
+                'search_time': time.time() - start_time,
+                'error_message': None
+            }
+        except Exception as e:
+            return {
+                'found': False,
+                'email': None,
+                'first_name': first_name,
+                'last_name': last_name,
+                'domain': domain,
+                'patterns_tested': 0,
+                'all_results': [],
+                'search_time': time.time() - start_time,
+                'error_message': f'Finder error: {str(e)}'
+            }
