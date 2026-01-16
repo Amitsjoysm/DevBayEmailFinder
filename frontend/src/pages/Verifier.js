@@ -169,6 +169,9 @@ const Verifier = () => {
 
     setBulkProcessing(true);
     setResults([]);
+    setJobStatus('queued');
+    setStatusFilter('all');
+    setProviderFilter('all');
 
     try {
       const response = await verifyApi.upload(bulkFile, threads[0], delay[0]);
@@ -177,6 +180,7 @@ const Verifier = () => {
     } catch (error) {
       toast.error('Failed to start verification');
       setBulkProcessing(false);
+      setJobStatus(null);
     }
   };
 
