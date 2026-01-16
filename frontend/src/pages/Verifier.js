@@ -32,9 +32,17 @@ const Verifier = () => {
   const [jobStatus, setJobStatus] = useState(null);
   const [retrying, setRetrying] = useState(false);
   
-  // Filters
+  // Filters and pagination
   const [statusFilter, setStatusFilter] = useState('all');
   const [providerFilter, setProviderFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalResults, setTotalResults] = useState(0);
+  const [pageSize] = useState(50);
+  
+  // UI states
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [csvValidationError, setCsvValidationError] = useState(null);
+  const [loadingResults, setLoadingResults] = useState(false);
 
   useEffect(() => {
     const socket = getSocket();
