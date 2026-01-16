@@ -452,6 +452,45 @@ async def get_results(
         "limit": limit
     }
 
+@api_router.get("/finder-results/{job_id}")
+async def get_finder_results(
+    job_id: str,
+    skip: int = 0,
+    limit: int = 100,
+    found: Optional[bool] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get finder results for a job"""
+    # Verify job ownership
+    job = await db.verification_jobs.find_one(
+        {"id": job_id, "user_id": current_user['id']},
+        {"_id": 0}
+    )
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Build filter
+    filter_query = {"job_id": job_id}
+    if found is not None:
+        filter_query["found"] = found
+    
+    # Get results
+    results = await db.finder_results.find(
+        filter_query,
+        {"_id": 0}
+    ).skip(skip).limit(limit).to_list(limit)
+    
+    # Get total count
+    total = await db.finder_results.count_documents(filter_query)
+    
+    return {
+        "results": results,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
 @api_router.get("/results/{job_id}/export")
 async def export_results(
     job_id: str,
