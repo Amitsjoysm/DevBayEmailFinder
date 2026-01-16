@@ -1,20 +1,71 @@
-import React, { useState } from 'react';
-import { finderApi } from '../lib/api';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { finderApi, resultsApi, jobApi } from '../lib/api';
+import { getSocket } from '../lib/socket';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { Search, Upload, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+import { Progress } from '../components/ui/progress';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Slider } from '../components/ui/slider';
+import { Search, Upload, CheckCircle, XCircle, Clock, Loader2, Download, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import Layout from '../components/Layout';
 
 const Finder = () => {
+  const { user } = useAuth();
+  
+  // Single finder state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [domain, setDomain] = useState('');
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState(null);
+
+  // Bulk finder state
+  const [bulkFile, setBulkFile] = useState(null);
+  const [threads, setThreads] = useState([10]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [currentJob, setCurrentJob] = useState(null);
+  const [jobProgress, setJobProgress] = useState(null);
+  const [finderResults, setFinderResults] = useState([]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (socket) {
+      socket.on('job_progress', handleJobProgress);
+      socket.on('finder_result', handleFinderResult);
+      socket.on('job_completed', handleJobCompleted);
+    }
+
+    return () => {
+      if (socket) {
+        socket.off('job_progress', handleJobProgress);
+        socket.off('finder_result', handleFinderResult);
+        socket.off('job_completed', handleJobCompleted);
+      }
+    };
+  }, []);
+
+  const handleJobProgress = (data) => {
+    if (data.job_id === currentJob) {
+      setJobProgress(data);
+    }
+  };
+
+  const handleFinderResult = (result) => {
+    setFinderResults(prev => [result, ...prev].slice(0, 100));
+  };
+
+  const handleJobCompleted = (data) => {
+    if (data.job_type === 'finder' && data.job_id === currentJob) {
+      toast.success('Email finding completed!');
+      setBulkProcessing(false);
+      loadFinderResults(data.job_id);
+    }
+  };
 
   const findEmail = async () => {
     if (!firstName || !lastName || !domain) {
@@ -39,14 +90,90 @@ const Finder = () => {
       }
     } catch (error) {
       toast.error('Search failed');
+      console.error(error);
     } finally {
       setSearching(false);
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (!file.name.endsWith('.csv')) {
+        toast.error('Please upload a CSV file');
+        return;
+      }
+      setBulkFile(file);
+      toast.success(`File "${file.name}" loaded`);
+    }
+  };
+
+  const startBulkFinder = async () => {
+    if (!bulkFile) {
+      toast.error('Please upload a CSV file');
+      return;
+    }
+
+    setBulkProcessing(true);
+    setFinderResults([]);
+    setJobProgress(null);
+
+    try {
+      const response = await finderApi.upload(bulkFile, threads[0]);
+      setCurrentJob(response.data.job_id);
+      toast.success(`Finding emails for ${response.data.total_records} records`);
+    } catch (error) {
+      toast.error('Failed to start bulk finder');
+      console.error(error);
+      setBulkProcessing(false);
+    }
+  };
+
+  const loadFinderResults = async (jobId) => {
+    try {
+      const response = await resultsApi.getFinder(jobId, 0, 100);
+      setFinderResults(response.data.results);
+    } catch (error) {
+      console.error('Failed to load finder results:', error);
+    }
+  };
+
+  const exportResults = async (format = 'csv') => {
+    if (!currentJob) {
+      toast.error('No job to export');
+      return;
+    }
+
+    try {
+      const response = await resultsApi.export(currentJob, format);
+      
+      if (format === 'csv') {
+        const blob = new Blob([response.data], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `finder_results_${currentJob}.csv`;
+        a.click();
+      } else {
+        const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `finder_results_${currentJob}.json`;
+        a.click();
+      }
+      
+      toast.success('Export successful!');
+    } catch (error) {
+      toast.error('Export failed');
+      console.error(error);
     }
   };
 
   return (
     <Layout>
       <div className="space-y-6" data-testid="finder-container">
+        {/* Single Email Finder */}
         <Card className="bg-surface border border-border/50 p-6">
           <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Chivo, sans-serif' }}>Email Pattern Finder</h2>
           <p className="text-sm text-muted-foreground mb-6">
@@ -145,6 +272,167 @@ const Finder = () => {
           )}
         </Card>
 
+        {/* Bulk Email Finder */}
+        <Card className="bg-surface border border-border/50 p-6">
+          <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Chivo, sans-serif' }}>Bulk Email Finder</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Upload a CSV file with columns: <code className="bg-secondary/50 px-2 py-1 rounded">first_name</code>, <code className="bg-secondary/50 px-2 py-1 rounded">last_name</code>, <code className="bg-secondary/50 px-2 py-1 rounded">domain</code>
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+              <Label className="mb-2 block">Upload CSV File</Label>
+              <Input
+                type="file"
+                accept=".csv"
+                onChange={handleFileUpload}
+                data-testid="bulk-finder-file-input"
+                className="bg-secondary/50 border-border"
+              />
+              {bulkFile && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Selected: {bulkFile.name}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label className="mb-2 block">Threads: {threads[0]}</Label>
+              <Slider
+                data-testid="finder-threads-slider"
+                value={threads}
+                onValueChange={setThreads}
+                min={1}
+                max={50}
+                step={1}
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Higher threads = faster processing but more server load
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              data-testid="start-bulk-finder-button"
+              onClick={startBulkFinder}
+              disabled={bulkProcessing || !bulkFile}
+              className="bg-blue-600 hover:bg-blue-700 hover:-translate-y-0.5 transition-transform"
+            >
+              <Play className="w-4 h-4 mr-2" />
+              Start Finding
+            </Button>
+            {currentJob && (
+              <>
+                <Button
+                  data-testid="export-finder-csv-button"
+                  onClick={() => exportResults('csv')}
+                  variant="outline"
+                  className="hover:-translate-y-0.5 transition-transform"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export CSV
+                </Button>
+                <Button
+                  data-testid="export-finder-json-button"
+                  onClick={() => exportResults('json')}
+                  variant="outline"
+                  className="hover:-translate-y-0.5 transition-transform"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export JSON
+                </Button>
+              </>
+            )}
+          </div>
+
+          {jobProgress && (
+            <div className="mt-6 p-4 bg-secondary/30 rounded-md border border-border/30" data-testid="finder-job-progress">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium">Progress</span>
+                <span className="text-sm" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  {jobProgress.processed_records}/{jobProgress.total_records}
+                </span>
+              </div>
+              <Progress value={jobProgress.progress_percentage} className="mb-4" />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-bold text-green-600">{jobProgress.found_count || 0}</p>
+                  <p className="text-xs text-muted-foreground">Found</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-red-600">{jobProgress.not_found_count || 0}</p>
+                  <p className="text-xs text-muted-foreground">Not Found</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-600">{jobProgress.error_count || 0}</p>
+                  <p className="text-xs text-muted-foreground">Errors</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-blue-600">{jobProgress.active_threads}</p>
+                  <p className="text-xs text-muted-foreground">Active Threads</p>
+                </div>
+              </div>
+              {jobProgress.eta_seconds && (
+                <p className="text-center text-sm text-muted-foreground mt-4">
+                  ETA: {Math.floor(jobProgress.eta_seconds / 60)}m {jobProgress.eta_seconds % 60}s
+                </p>
+              )}
+            </div>
+          )}
+        </Card>
+
+        {/* Results Table */}
+        {finderResults.length > 0 && (
+          <Card className="bg-surface border border-border/50 p-6">
+            <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Chivo, sans-serif' }}>Recent Results</h2>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border/50">
+                    <TableHead className="font-bold uppercase text-xs tracking-wider">Name</TableHead>
+                    <TableHead className="font-bold uppercase text-xs tracking-wider">Domain</TableHead>
+                    <TableHead className="font-bold uppercase text-xs tracking-wider">Status</TableHead>
+                    <TableHead className="font-bold uppercase text-xs tracking-wider">Email</TableHead>
+                    <TableHead className="font-bold uppercase text-xs tracking-wider">Time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {finderResults.slice(0, 20).map((result) => (
+                    <TableRow key={result.id} className="border-border/50">
+                      <TableCell className="font-medium">
+                        {result.first_name} {result.last_name}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{result.domain}</TableCell>
+                      <TableCell>
+                        {result.found ? (
+                          <Badge className="bg-green-600/10 text-green-600 border-green-600/20 border">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Found
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-red-600/10 text-red-600 border-red-600/20 border">
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Not Found
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {result.email || '-'}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {result.search_time ? `${result.search_time.toFixed(2)}s` : '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        )}
+
+        {/* Email Patterns Reference */}
         <Card className="bg-surface border border-border/50 p-6">
           <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Chivo, sans-serif' }}>Email Patterns We Test</h2>
           <p className="text-sm text-muted-foreground mb-4">
