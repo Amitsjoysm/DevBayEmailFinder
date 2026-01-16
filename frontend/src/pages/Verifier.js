@@ -536,7 +536,41 @@ const Verifier = () => {
 
         {results.length > 0 && (
           <Card className="bg-surface border border-border/50 p-6">
-            <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Chivo, sans-serif' }}>Recent Results</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>Recent Results</h2>
+              <div className="flex gap-2">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[150px]" data-testid="status-filter">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="valid">Valid</SelectItem>
+                    <SelectItem value="invalid">Invalid</SelectItem>
+                    <SelectItem value="risky">Risky</SelectItem>
+                    <SelectItem value="unknown">Unknown</SelectItem>
+                    <SelectItem value="disposable">Disposable</SelectItem>
+                    <SelectItem value="blocked">Blocked</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <Select value={providerFilter} onValueChange={setProviderFilter}>
+                  <SelectTrigger className="w-[150px]" data-testid="provider-filter">
+                    <SelectValue placeholder="Filter by provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Providers</SelectItem>
+                    <SelectItem value="Gmail">Gmail</SelectItem>
+                    <SelectItem value="GSuite">GSuite</SelectItem>
+                    <SelectItem value="Outlook">Outlook</SelectItem>
+                    <SelectItem value="O365">O365</SelectItem>
+                    <SelectItem value="Yahoo">Yahoo</SelectItem>
+                    <SelectItem value="Zoho">Zoho</SelectItem>
+                    <SelectItem value="Custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -545,6 +579,7 @@ const Verifier = () => {
                     <TableHead className="font-bold uppercase text-xs tracking-wider">Status</TableHead>
                     <TableHead className="font-bold uppercase text-xs tracking-wider">Provider</TableHead>
                     <TableHead className="font-bold uppercase text-xs tracking-wider">Response Time</TableHead>
+                    <TableHead className="font-bold uppercase text-xs tracking-wider">Details</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -555,6 +590,9 @@ const Verifier = () => {
                       <TableCell>{getProviderBadge(result.provider)}</TableCell>
                       <TableCell className="font-mono text-sm">
                         {(result.response_time * 1000).toFixed(0)}ms
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
+                        {result.error_message || result.smtp_response || '-'}
                       </TableCell>
                     </TableRow>
                   ))}
