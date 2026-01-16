@@ -507,13 +507,19 @@ async def export_results(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
+    # Determine collection based on job type
+    job_type = job.get('job_type', 'verification')
+    
     # Build filter
     filter_query = {"job_id": job_id}
     if status:
         filter_query["status"] = status
     
-    # Get all results
-    results = await db.verification_results.find(filter_query, {"_id": 0}).to_list(None)
+    # Get all results from appropriate collection
+    if job_type == 'finder':
+        results = await db.finder_results.find(filter_query, {"_id": 0}).to_list(None)
+    else:
+        results = await db.verification_results.find(filter_query, {"_id": 0}).to_list(None)
     
     if format == "json":
         return results
