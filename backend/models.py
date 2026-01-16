@@ -145,9 +145,36 @@ class JobProgress(BaseModel):
     invalid_count: int
     risky_count: int
     unknown_count: int
+    found_count: int = 0
+    not_found_count: int = 0
     progress_percentage: float
     eta_seconds: Optional[int] = None
     active_threads: int
+    error_count: int = 0
+
+# Bulk Finder Models
+class BulkFinderRequest(BaseModel):
+    records: List[Dict[str, str]]  # [{first_name, last_name, domain}]
+    threads: int = 10
+    stop_on_first_valid: bool = True
+
+class FinderResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    user_id: str
+    first_name: str
+    last_name: str
+    domain: str
+    found: bool
+    email: Optional[str] = None
+    status: Optional[VerificationStatus] = None
+    provider: Optional[EmailProvider] = None
+    patterns_tested: int = 0
+    search_time: float = 0
+    verified_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    error_message: Optional[str] = None
 
 # Proxy Models
 class ProxyCreate(BaseModel):
