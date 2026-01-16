@@ -24,6 +24,8 @@ class EmailVerifier:
         self.verification_cache = {}
         self.mx_cache = {}
         self.pattern_cache = {}
+        self.domain_request_times = {}  # Track last request time per domain
+        self.current_proxy = None
     
     def is_valid_email_format(self, email: str) -> bool:
         """Validate email format using RFC 5322 regex"""
