@@ -140,7 +140,8 @@ class EmailFinder:
                 'patterns_tested': len(results),
                 'all_results': results,
                 'search_time': time.time() - start_time,
-                'error_message': None
+                'error_message': None,
+                'deliverability_score': 0  # Will be calculated after return
             }
         except Exception as e:
             return {
@@ -152,5 +153,6 @@ class EmailFinder:
                 'patterns_tested': 0,
                 'all_results': [],
                 'search_time': time.time() - start_time,
-                'error_message': f'Finder error: {str(e)}'
+                'error_message': f'Finder error: {str(e)}',
+                'deliverability_score': 0
             }
