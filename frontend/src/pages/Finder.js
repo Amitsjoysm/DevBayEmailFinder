@@ -64,6 +64,80 @@ const Finder = () => {
     };
   }, []);
 
+  // Load job history on mount
+  useEffect(() => {
+    loadJobHistory();
+  }, []);
+
+  // Poll job status when job is active
+  useEffect(() => {
+    if (!currentJob || !['queued', 'processing'].includes(jobStatus)) {
+      return;
+    }
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await jobApi.get(currentJob);
+        const job = response.data;
+        setJobStatus(job.status);
+        setJobProgress({
+          processed: job.processed_records,
+          total: job.total_records,
+          status: job.status,
+          found_count: job.valid_count || 0,
+          not_found_count: job.invalid_count || 0
+        });
+
+        // Stop polling if job completed
+        if (!['queued', 'processing'].includes(job.status)) {
+          if (job.status === 'completed') {
+            loadFinderResults(currentJob, 0);
+            toast.success('Email finding completed!');
+          }
+          setBulkProcessing(false);
+        }
+      } catch (error) {
+        console.error('Failed to poll job status:', error);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [currentJob, jobStatus]);
+
+  const loadJobHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const response = await jobApi.list();
+      // Filter only finder jobs
+      const finderJobs = response.data.filter(job => job.job_type === 'finder');
+      setJobHistory(finderJobs);
+    } catch (error) {
+      console.error('Failed to load job history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const viewJobResults = async (job) => {
+    setCurrentJob(job.id);
+    setJobStatus(job.status);
+    setJobProgress({
+      processed: job.processed_records,
+      total: job.total_records,
+      status: job.status,
+      found_count: job.valid_count || 0,
+      not_found_count: job.invalid_count || 0
+    });
+    
+    // Load results for this job
+    await loadFinderResults(job.id, 0);
+    
+    // Scroll to results section
+    document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' });
+    
+    toast.success('Loaded job results');
+  };
+
   const handleJobProgress = (data) => {
     if (data.job_id === currentJob) {
       setJobProgress(data);
@@ -81,6 +155,7 @@ const Finder = () => {
       setBulkProcessing(false);
       setJobStatus('completed');
       loadFinderResults(data.job_id, 0);
+      loadJobHistory(); // Refresh job history
     }
   };
 
