@@ -125,11 +125,16 @@ class VerificationJob(BaseModel):
     invalid_count: int = 0
     risky_count: int = 0
     unknown_count: int = 0
+    found_count: int = 0  # For finder jobs
+    not_found_count: int = 0  # For finder jobs
     settings: Dict = {}
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    paused_at: Optional[datetime] = None
     eta_seconds: Optional[int] = None
+    error_count: int = 0
+    error_message: Optional[str] = None
 
 class JobProgress(BaseModel):
     job_id: str
