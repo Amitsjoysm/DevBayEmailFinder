@@ -345,6 +345,18 @@ frontend:
       - working: true
         agent: "main"
         comment: "Added tooltips for all buttons, success rate indicators, better loading states, improved job status indicators with animations, ETA display with better formatting, and error count warnings"
+  
+  - task: "Job History & Previous Results Access"
+    implemented: true
+    working: true
+    file: "pages/Verifier.js, pages/Finder.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implemented collapsible job history section showing last 10 jobs with job ID, date, status, and counts. Added 'View Results' button to load any previous job. Users can now export CSV/JSON from any historical job. Added job polling (3s interval) as fallback for progress updates when socket.io fails. Job history auto-refreshes after new jobs complete. Visual indicator shows currently selected job."
 
 metadata:
   created_by: "main_agent"
