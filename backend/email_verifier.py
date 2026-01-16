@@ -170,12 +170,12 @@ class EmailVerifier:
         except Exception as e:
             return VerificationStatus.UNKNOWN, f"External API error: {str(e)}"
     
-    async def verify_email(self, email: str, use_api_fallback: bool = True) -> dict:
-        """Main verification function"""
+    async def verify_email(self, email: str, use_api_fallback: bool = True, proxy: dict = None, retry_count: int = 0) -> dict:
+        """Main verification function with retry support"""
         start_time = time.time()
         
         # Check cache
-        if email in self.verification_cache:
+        if email in self.verification_cache and retry_count == 0:
             cached = self.verification_cache[email]
             if (datetime.now(timezone.utc) - cached['timestamp']).seconds < 3600:
                 return cached['result']
@@ -190,60 +190,72 @@ class EmailVerifier:
             'is_catch_all': False,
             'is_role_based': False,
             'is_disposable': False,
-            'verified_at': datetime.now(timezone.utc)
+            'verified_at': datetime.now(timezone.utc),
+            'retry_count': retry_count,
+            'error_message': None
         }
         
-        # Format validation
-        if not self.is_valid_email_format(email):
-            result['status'] = VerificationStatus.INVALID
-            result['smtp_response'] = 'Invalid email format'
+        try:
+            # Format validation
+            if not self.is_valid_email_format(email):
+                result['status'] = VerificationStatus.INVALID
+                result['smtp_response'] = 'Invalid email format'
+                result['error_message'] = 'Email format is invalid'
+                result['response_time'] = time.time() - start_time
+                return result
+            
+            # Check disposable
+            result['is_disposable'] = self.is_disposable(email)
+            if result['is_disposable']:
+                result['status'] = VerificationStatus.DISPOSABLE
+                result['smtp_response'] = 'Disposable email provider'
+                result['response_time'] = time.time() - start_time
+                return result
+            
+            # Check role-based
+            result['is_role_based'] = self.is_role_based(email)
+            
+            # Get MX records
+            domain = email.split('@')[1]
+            mx_records, mx_valid = await self.get_mx_records(domain)
+            result['mx_records'] = mx_records
+            
+            if not mx_valid or not mx_records:
+                result['status'] = VerificationStatus.INVALID
+                result['smtp_response'] = 'No MX records found'
+                result['error_message'] = 'Domain has no valid MX records'
+                result['response_time'] = time.time() - start_time
+                return result
+            
+            # Detect provider
+            result['provider'] = self.detect_provider(mx_records)
+            
+            # SMTP verification
+            status, response, is_catch_all = await self.verify_smtp(email, mx_records[0], proxy=proxy)
+            result['status'] = status
+            result['smtp_response'] = response
+            result['is_catch_all'] = is_catch_all
+            
+            # Fallback to external API if SMTP fails
+            if use_api_fallback and status == VerificationStatus.UNKNOWN:
+                api_status, api_response = await self.verify_external_api(email)
+                if api_status != VerificationStatus.UNKNOWN:
+                    result['status'] = api_status
+                    result['smtp_response'] = api_response
+            
             result['response_time'] = time.time() - start_time
-            return result
+            
+            # Cache successful results
+            if result['status'] in [VerificationStatus.VALID, VerificationStatus.INVALID]:
+                self.verification_cache[email] = {
+                    'result': result,
+                    'timestamp': datetime.now(timezone.utc)
+                }
         
-        # Check disposable
-        result['is_disposable'] = self.is_disposable(email)
-        if result['is_disposable']:
-            result['status'] = VerificationStatus.DISPOSABLE
-            result['smtp_response'] = 'Disposable email provider'
+        except Exception as e:
+            result['status'] = VerificationStatus.UNKNOWN
+            result['smtp_response'] = f'Verification error: {str(e)}'
+            result['error_message'] = str(e)
             result['response_time'] = time.time() - start_time
-            return result
-        
-        # Check role-based
-        result['is_role_based'] = self.is_role_based(email)
-        
-        # Get MX records
-        domain = email.split('@')[1]
-        mx_records, mx_valid = await self.get_mx_records(domain)
-        result['mx_records'] = mx_records
-        
-        if not mx_valid or not mx_records:
-            result['status'] = VerificationStatus.INVALID
-            result['smtp_response'] = 'No MX records found'
-            result['response_time'] = time.time() - start_time
-            return result
-        
-        # Detect provider
-        result['provider'] = self.detect_provider(mx_records)
-        
-        # SMTP verification
-        status, response, is_catch_all = await self.verify_smtp(email, mx_records[0])
-        result['status'] = status
-        result['smtp_response'] = response
-        result['is_catch_all'] = is_catch_all
-        
-        # Fallback to external API if SMTP fails
-        if use_api_fallback and status == VerificationStatus.UNKNOWN:
-            api_status, api_response = await self.verify_external_api(email)
-            if api_status != VerificationStatus.UNKNOWN:
-                result['status'] = api_status
-                result['smtp_response'] = api_response
-        
-        result['response_time'] = time.time() - start_time
-        
-        # Cache result
-        self.verification_cache[email] = {
-            'result': result,
-            'timestamp': datetime.now(timezone.utc)
-        }
         
         return result
