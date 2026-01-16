@@ -863,6 +863,7 @@ const Finder = () => {
                         <TableHead className="font-bold uppercase text-xs tracking-wider">Domain</TableHead>
                         <TableHead className="font-bold uppercase text-xs tracking-wider">Email Found</TableHead>
                         <TableHead className="font-bold uppercase text-xs tracking-wider">Status</TableHead>
+                        <TableHead className="font-bold uppercase text-xs tracking-wider">Score</TableHead>
                         <TableHead className="font-bold uppercase text-xs tracking-wider">Patterns Tested</TableHead>
                         <TableHead className="font-bold uppercase text-xs tracking-wider">Search Time</TableHead>
                       </TableRow>
@@ -893,6 +894,9 @@ const Finder = () => {
                                 Not Found
                               </Badge>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            {result.found ? getDeliverabilityScoreBadge(result.deliverability_score || 0) : <span className="text-xs text-muted-foreground">-</span>}
                           </TableCell>
                           <TableCell className="text-sm">{result.patterns_tested || 0}</TableCell>
                           <TableCell className="font-mono text-sm">
