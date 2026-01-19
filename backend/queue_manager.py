@@ -7,23 +7,27 @@ from models import VerificationJob, VerificationResult, JobStatus, VerificationS
 from email_verifier import EmailVerifier
 from email_finder import EmailFinder
 from ledger_service import LedgerService
+from redis_service import RedisService
 import random
 import logging
 
 logger = logging.getLogger(__name__)
 
 class VerificationQueue:
-    def __init__(self, db, socketio):
+    def __init__(self, db, socketio, redis_service: Optional[RedisService] = None):
         self.db = db
         self.socketio = socketio
         self.verifier = EmailVerifier()
         self.finder = EmailFinder()
         self.ledger = LedgerService(db)
-        self.active_jobs = {}  # job_id -> job_state
+        self.redis = redis_service  # Redis for job persistence and caching
+        self.active_jobs = {}  # job_id -> job_state (in-memory for fast access)
         self.user_proxies = {}  # user_id -> {proxies: [], current_index: 0}
         self.retry_queue = asyncio.Queue()
         self.user_domain_last_request = {}  # Track last request time per user per domain: user_id -> domain -> timestamp
         self._locks = {}  # job_id -> asyncio.Lock for thread-safe operations
+        
+        logger.info(f"✅ VerificationQueue initialized with Redis: {self.redis is not None}")
     
     async def load_proxies(self, user_id: str):
         """Load active proxies for user with per-user isolation"""
