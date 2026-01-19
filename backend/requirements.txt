@@ -97,6 +97,8 @@ python-multipart==0.0.21
 python-socketio==5.16.0
 pytokens==0.3.0
 pytz==2025.2
+redis==5.0.1
+hiredis==2.3.2
 PyYAML==6.0.3
 referencing==0.37.0
 regex==2025.11.3
