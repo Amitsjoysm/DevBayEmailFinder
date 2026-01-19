@@ -1011,10 +1011,24 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup_db():
-    """Initialize database indexes on startup"""
+    """Initialize database indexes and recover jobs on startup"""
     await ledger_service.initialize()
-    logger.info("Application startup complete")
+    
+    # Recover active jobs from Redis (Phase 1 - Critical for preventing job loss)
+    if redis_service and redis_service.is_healthy():
+        logger.info("🔄 Recovering active jobs from Redis...")
+        await queue_manager.recover_jobs_from_redis()
+    else:
+        logger.warning("⚠️ Redis not available, job recovery skipped")
+    
+    logger.info("✅ Application startup complete")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    """Cleanup on shutdown"""
     client.close()
+    
+    # Close Redis connection
+    if redis_service:
+        redis_service.disconnect()
+        logger.info("Redis connection closed")
