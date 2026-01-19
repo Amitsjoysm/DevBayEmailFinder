@@ -506,8 +506,8 @@ class VerificationQueue:
             # Emit completion
             await self.socketio.emit('job_completed', {'job_id': job_id}, room=user_id)
             
-            # Clean up
-            del self.active_jobs[job_id]
+            # Clean up and mark as completed in Redis
+            await self.cleanup_completed_job(job_id)
             
         except Exception as e:
             logger.error(f"Error in verification job {job_id}: {e}")
