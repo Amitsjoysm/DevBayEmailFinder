@@ -201,7 +201,7 @@ class VerificationQueue:
                 
                 if cached_result:
                     # Use cached result from ledger
-                    logger.info(f"Using cached result for {email}")
+                    logger.info(f"Using cached result for {email} (from {'Redis' if self.redis else 'MongoDB'})")
                     result = {
                         'status': VerificationStatus(cached_result['status']),
                         'provider': EmailProvider(cached_result['provider']),
@@ -220,7 +220,7 @@ class VerificationQueue:
                     # Get domain for delay management
                     domain = email.split('@')[1] if '@' in email else ''
                     
-                    # Apply domain-specific delay
+                    # Apply domain-specific delay (Redis-enhanced)
                     domain_delay = settings.get('domain_delay', 2)
                     if domain and domain_delay > 0:
                         await self.apply_domain_delay(user_id, domain, domain_delay)
@@ -240,7 +240,11 @@ class VerificationQueue:
                     # Verify email
                     result = await self.verifier.verify_email(email, use_api_fallback=True, proxy=proxy)
                     
-                    # Save to ledger
+                    # Save to Redis cache (L1) for fast access
+                    if self.redis and self.redis.is_healthy():
+                        self.redis.cache_email_result(email, user_id, result)
+                    
+                    # Save to MongoDB ledger (L2) for long-term storage
                     await self.ledger.save_to_ledger(email, user_id, result, source="verification", job_id=job_id)
                 
                 # Create result document
