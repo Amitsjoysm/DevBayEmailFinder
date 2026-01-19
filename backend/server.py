@@ -28,6 +28,7 @@ from email_verifier import EmailVerifier
 from email_finder import EmailFinder
 from queue_manager import VerificationQueue
 from ledger_service import LedgerService
+from redis_service import init_redis_service, get_redis_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -37,13 +38,41 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Socket.IO setup
-sio = socketio.AsyncServer(
-    async_mode='asgi',
-    cors_allowed_origins='*',
-    logger=True,
-    engineio_logger=False
-)
+# Redis connection
+redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+redis_service = init_redis_service(redis_url)
+
+# Socket.IO setup with Redis adapter for production scalability (Phase 3)
+try:
+    if redis_service and redis_service.is_healthy():
+        # Use Redis adapter for multi-worker Socket.IO support
+        import socketio.asyncio_manager as socketio_manager
+        mgr = socketio_manager.AsyncRedisManager(redis_url)
+        sio = socketio.AsyncServer(
+            async_mode='asgi',
+            cors_allowed_origins='*',
+            client_manager=mgr,
+            logger=True,
+            engineio_logger=False
+        )
+        logging.info("✅ Socket.IO initialized with Redis adapter for multi-worker support")
+    else:
+        # Fallback to standard Socket.IO without Redis
+        sio = socketio.AsyncServer(
+            async_mode='asgi',
+            cors_allowed_origins='*',
+            logger=True,
+            engineio_logger=False
+        )
+        logging.warning("⚠️ Socket.IO initialized without Redis adapter (single-worker mode)")
+except Exception as e:
+    logging.error(f"Failed to initialize Redis adapter for Socket.IO: {e}")
+    sio = socketio.AsyncServer(
+        async_mode='asgi',
+        cors_allowed_origins='*',
+        logger=True,
+        engineio_logger=False
+    )
 
 # Create the main app
 app = FastAPI()
@@ -57,7 +86,7 @@ api_router = APIRouter(prefix="/api")
 # Initialize services
 verifier = EmailVerifier()
 finder = EmailFinder()
-queue_manager = VerificationQueue(db, sio)
+queue_manager = VerificationQueue(db, sio, redis_service)
 ledger_service = LedgerService(db)
 
 # Socket.IO events
