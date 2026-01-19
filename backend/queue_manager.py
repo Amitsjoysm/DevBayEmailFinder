@@ -56,7 +56,18 @@ class VerificationQueue:
         return proxy
     
     async def apply_domain_delay(self, user_id: str, domain: str, delay_seconds: int):
-        """Apply domain-specific delay per user to prevent rate limiting"""
+        """Apply domain-specific delay per user to prevent rate limiting - Redis-enhanced"""
+        # Try Redis first for distributed rate limiting
+        if self.redis and self.redis.is_healthy():
+            try:
+                wait_time = self.redis.apply_domain_rate_limit(user_id, domain, delay_seconds)
+                if wait_time > 0:
+                    await asyncio.sleep(wait_time)
+                return
+            except Exception as e:
+                logger.warning(f"Redis rate limiting failed, falling back to in-memory: {e}")
+        
+        # Fallback to in-memory rate limiting
         if user_id not in self.user_domain_last_request:
             self.user_domain_last_request[user_id] = {}
         
