@@ -178,7 +178,7 @@ class VerificationQueue:
                     # Apply domain-specific delay
                     domain_delay = settings.get('domain_delay', 2)
                     if domain and domain_delay > 0:
-                        await self.apply_domain_delay(domain, domain_delay)
+                        await self.apply_domain_delay(user_id, domain, domain_delay)
                     
                     # Apply global delay
                     if settings.get('global_delay', 0) > 0:
@@ -189,8 +189,8 @@ class VerificationQueue:
                     
                     # Get proxy if enabled
                     proxy = None
-                    if settings.get('use_proxies') and self.proxies:
-                        proxy = self.get_next_proxy()
+                    if settings.get('use_proxies'):
+                        proxy = self.get_next_proxy(user_id)
                     
                     # Verify email
                     result = await self.verifier.verify_email(email, use_api_fallback=True, proxy=proxy)
@@ -280,7 +280,7 @@ class VerificationQueue:
                 # Apply domain-specific delay
                 domain_delay = settings.get('domain_delay', 2)
                 if domain_delay > 0:
-                    await self.apply_domain_delay(domain, domain_delay)
+                    await self.apply_domain_delay(user_id, domain, domain_delay)
                 
                 # Apply global delay
                 if settings.get('global_delay', 0) > 0:
@@ -291,8 +291,8 @@ class VerificationQueue:
                 
                 # Get proxy if enabled
                 proxy = None
-                if settings.get('use_proxies') and self.proxies:
-                    proxy = self.get_next_proxy()
+                if settings.get('use_proxies'):
+                    proxy = self.get_next_proxy(user_id)
                 
                 # Find email
                 result = await self.finder.find_email(
