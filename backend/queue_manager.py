@@ -453,6 +453,10 @@ class VerificationQueue:
             job_state = self.active_jobs[job_id]
             job = job_state['job']
             
+            # Save initial job state to Redis (Phase 1 - Critical)
+            if self.redis and self.redis.is_healthy():
+                self.redis.save_job_state(job_id, job)
+            
             # Update job status in database
             await self.db.verification_jobs.update_one(
                 {"id": job_id},
