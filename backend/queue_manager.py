@@ -617,7 +617,7 @@ class VerificationQueue:
                 del self.active_jobs[job_id]
     
     async def pause_job(self, job_id: str):
-        """Pause a running job"""
+        """Pause a running job - Redis-enhanced"""
         try:
             if job_id in self.active_jobs:
                 self.active_jobs[job_id]['job']['status'] = JobStatus.PAUSED
@@ -628,12 +628,16 @@ class VerificationQueue:
                         "paused_at": datetime.now(timezone.utc).isoformat()
                     }}
                 )
+                
+                # Save paused state to Redis
+                await self.save_job_state_to_redis(job_id)
+                
                 logger.info(f"Job {job_id} paused")
         except Exception as e:
             logger.error(f"Error pausing job {job_id}: {e}")
     
     async def resume_job(self, job_id: str):
-        """Resume a paused job"""
+        """Resume a paused job - Redis-enhanced"""
         try:
             if job_id in self.active_jobs:
                 self.active_jobs[job_id]['job']['status'] = JobStatus.PROCESSING
@@ -641,12 +645,16 @@ class VerificationQueue:
                     {"id": job_id},
                     {"$set": {"status": JobStatus.PROCESSING.value}}
                 )
+                
+                # Save resumed state to Redis
+                await self.save_job_state_to_redis(job_id)
+                
                 logger.info(f"Job {job_id} resumed")
         except Exception as e:
             logger.error(f"Error resuming job {job_id}: {e}")
     
     async def stop_job(self, job_id: str):
-        """Stop a running job"""
+        """Stop a running job - Redis-enhanced"""
         try:
             if job_id in self.active_jobs:
                 job_state = self.active_jobs[job_id]
@@ -661,7 +669,9 @@ class VerificationQueue:
                     {"$set": {"status": JobStatus.FAILED.value}}
                 )
                 
-                del self.active_jobs[job_id]
+                # Clean up from Redis
+                await self.cleanup_completed_job(job_id)
+                
                 logger.info(f"Job {job_id} stopped")
         except Exception as e:
             logger.error(f"Error stopping job {job_id}: {e}")
