@@ -190,8 +190,14 @@ class VerificationQueue:
                 # Emit current email being processed for live counter
                 await self.update_job_progress(job_id, user_id, current_email=email)
                 
-                # Check ledger first for cached result
-                cached_result = await self.ledger.get_from_ledger(email, user_id)
+                # Check Redis cache first (L1 cache)
+                cached_result = None
+                if self.redis and self.redis.is_healthy():
+                    cached_result = self.redis.get_cached_email_result(email, user_id)
+                
+                # If not in Redis, check MongoDB ledger (L2 cache)
+                if not cached_result:
+                    cached_result = await self.ledger.get_from_ledger(email, user_id)
                 
                 if cached_result:
                     # Use cached result from ledger
