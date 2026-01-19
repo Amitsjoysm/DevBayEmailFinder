@@ -20,39 +20,48 @@ class VerificationQueue:
         self.finder = EmailFinder()
         self.ledger = LedgerService(db)
         self.active_jobs = {}  # job_id -> job_state
-        self.proxies = []
-        self.current_proxy_index = 0
+        self.user_proxies = {}  # user_id -> {proxies: [], current_index: 0}
         self.retry_queue = asyncio.Queue()
-        self.domain_last_request = {}  # Track last request time per domain
+        self.user_domain_last_request = {}  # Track last request time per user per domain: user_id -> domain -> timestamp
+        self._locks = {}  # job_id -> asyncio.Lock for thread-safe operations
     
     async def load_proxies(self, user_id: str):
-        """Load active proxies for user"""
+        """Load active proxies for user with per-user isolation"""
         try:
             proxies = await self.db.proxies.find(
                 {"user_id": user_id, "is_active": True},
                 {"_id": 0}
             ).to_list(None)
-            self.proxies = proxies
+            self.user_proxies[user_id] = {
+                'proxies': proxies,
+                'current_index': 0
+            }
             logger.info(f"Loaded {len(proxies)} proxies for user {user_id}")
         except Exception as e:
-            logger.error(f"Failed to load proxies: {e}")
-            self.proxies = []
+            logger.error(f"Failed to load proxies for user {user_id}: {e}")
+            self.user_proxies[user_id] = {'proxies': [], 'current_index': 0}
     
-    def get_next_proxy(self) -> Optional[dict]:
-        """Get next proxy from rotation"""
-        if not self.proxies:
+    def get_next_proxy(self, user_id: str) -> Optional[dict]:
+        """Get next proxy from rotation with per-user isolation"""
+        if user_id not in self.user_proxies or not self.user_proxies[user_id]['proxies']:
             return None
-        proxy = self.proxies[self.current_proxy_index]
-        self.current_proxy_index = (self.current_proxy_index + 1) % len(self.proxies)
+        
+        user_proxy_state = self.user_proxies[user_id]
+        proxy = user_proxy_state['proxies'][user_proxy_state['current_index']]
+        user_proxy_state['current_index'] = (user_proxy_state['current_index'] + 1) % len(user_proxy_state['proxies'])
         return proxy
     
-    async def apply_domain_delay(self, domain: str, delay_seconds: int):
-        """Apply domain-specific delay to prevent rate limiting"""
-        if domain in self.domain_last_request:
-            elapsed = time.time() - self.domain_last_request[domain]
+    async def apply_domain_delay(self, user_id: str, domain: str, delay_seconds: int):
+        """Apply domain-specific delay per user to prevent rate limiting"""
+        if user_id not in self.user_domain_last_request:
+            self.user_domain_last_request[user_id] = {}
+        
+        user_domains = self.user_domain_last_request[user_id]
+        if domain in user_domains:
+            elapsed = time.time() - user_domains[domain]
             if elapsed < delay_seconds:
                 await asyncio.sleep(delay_seconds - elapsed)
-        self.domain_last_request[domain] = time.time()
+        user_domains[domain] = time.time()
     
     async def update_job_progress(self, job_id: str, user_id: str, current_email: str = None):
         """Update and broadcast job progress with live counter"""
