@@ -1104,9 +1104,11 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=["*"],  # Allow all origins (both HTTP and HTTPS)
+    allow_origin_regex=r"https?://.*",  # Explicitly allow both http:// and https://
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]  # Expose all headers for frontend access
 )
 
 # Configure logging
