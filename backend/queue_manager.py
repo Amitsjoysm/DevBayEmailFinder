@@ -716,3 +716,115 @@ class VerificationQueue:
             
         except Exception as e:
             logger.error(f"Error in retry_failed_verifications: {e}")
+
+    async def recover_jobs_from_redis(self):
+        """
+        Recover active jobs from Redis after restart (Phase 1 - Critical)
+        This prevents job loss on backend crashes/restarts
+        """
+        if not self.redis or not self.redis.is_healthy():
+            logger.info("Redis not available, skipping job recovery")
+            return
+        
+        try:
+            active_job_ids = self.redis.get_active_jobs()
+            
+            if not active_job_ids:
+                logger.info("No active jobs to recover from Redis")
+                return
+            
+            logger.info(f"🔄 Recovering {len(active_job_ids)} active jobs from Redis...")
+            recovered_count = 0
+            
+            for job_id in active_job_ids:
+                try:
+                    # Get job state from Redis
+                    redis_job_state = self.redis.get_job_state(job_id)
+                    
+                    if not redis_job_state:
+                        logger.warning(f"Job {job_id} not found in Redis, skipping")
+                        continue
+                    
+                    # Get job from MongoDB
+                    job_doc = await self.db.verification_jobs.find_one({"id": job_id})
+                    
+                    if not job_doc:
+                        logger.warning(f"Job {job_id} not found in MongoDB, cleaning up Redis")
+                        self.redis.delete_job_state(job_id)
+                        continue
+                    
+                    # Only recover jobs that were processing or paused
+                    if job_doc.get('status') not in [JobStatus.PROCESSING, JobStatus.PAUSED]:
+                        logger.info(f"Job {job_id} already completed/failed, skipping recovery")
+                        self.redis.mark_job_completed(job_id)
+                        continue
+                    
+                    # Restore job to in-memory active_jobs
+                    job_state = {
+                        'job': {
+                            'id': job_doc['id'],
+                            'user_id': job_doc['user_id'],
+                            'status': job_doc['status'],
+                            'job_type': job_doc.get('job_type', 'verification'),
+                            'total_records': job_doc['total_records'],
+                            'processed_records': job_doc['processed_records'],
+                            'valid_count': job_doc['valid_count'],
+                            'invalid_count': job_doc['invalid_count'],
+                            'risky_count': job_doc['risky_count'],
+                            'unknown_count': job_doc['unknown_count'],
+                            'found_count': job_doc.get('found_count', 0),
+                            'not_found_count': job_doc.get('not_found_count', 0),
+                            'error_count': job_doc.get('error_count', 0),
+                            'started_at': job_doc.get('started_at'),
+                            'eta_seconds': job_doc.get('eta_seconds')
+                        },
+                        'task': None,  # Will be resumed if needed
+                        'active_threads': 0
+                    }
+                    
+                    self.active_jobs[job_id] = job_state
+                    
+                    # If job was processing, mark as paused (require manual resume)
+                    if job_doc.get('status') == JobStatus.PROCESSING:
+                        await self.db.verification_jobs.update_one(
+                            {"id": job_id},
+                            {"$set": {
+                                "status": JobStatus.PAUSED,
+                                "paused_at": datetime.now(timezone.utc).isoformat()
+                            }}
+                        )
+                        job_state['job']['status'] = JobStatus.PAUSED
+                        logger.info(f"Job {job_id} recovered and paused (requires manual resume)")
+                    
+                    recovered_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"Failed to recover job {job_id}: {e}")
+                    continue
+            
+            logger.info(f"✅ Successfully recovered {recovered_count}/{len(active_job_ids)} jobs from Redis")
+            
+        except Exception as e:
+            logger.error(f"Error during job recovery: {e}")
+    
+    async def save_job_state_to_redis(self, job_id: str):
+        """Save current job state to Redis for persistence"""
+        if not self.redis or not self.redis.is_healthy():
+            return
+        
+        if job_id in self.active_jobs:
+            try:
+                job_state = self.active_jobs[job_id]
+                self.redis.save_job_state(job_id, job_state['job'])
+            except Exception as e:
+                logger.error(f"Failed to save job state to Redis: {e}")
+    
+    async def cleanup_completed_job(self, job_id: str):
+        """Clean up completed job from active jobs and update Redis"""
+        if job_id in self.active_jobs:
+            del self.active_jobs[job_id]
+            
+        # Update Redis - mark as completed (reduces TTL)
+        if self.redis and self.redis.is_healthy():
+            self.redis.mark_job_completed(job_id)
+
