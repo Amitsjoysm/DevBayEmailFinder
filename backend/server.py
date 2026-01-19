@@ -991,6 +991,113 @@ async def get_ledger_entry(
         logger.error(f"Failed to get ledger entry: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ============================================================================
+# Health Check & Monitoring Endpoints (Phase 3)
+# ============================================================================
+
+@api_router.get("/health")
+async def health_check():
+    """
+    Comprehensive health check for all services
+    """
+    health_status = {
+        'status': 'healthy',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'services': {}
+    }
+    
+    # Check MongoDB
+    try:
+        await db.command('ping')
+        health_status['services']['mongodb'] = {
+            'status': 'healthy',
+            'connection': 'active'
+        }
+    except Exception as e:
+        health_status['services']['mongodb'] = {
+            'status': 'unhealthy',
+            'error': str(e)
+        }
+        health_status['status'] = 'degraded'
+    
+    # Check Redis
+    if redis_service:
+        try:
+            is_healthy = redis_service.is_healthy()
+            redis_info = redis_service.get_info()
+            health_status['services']['redis'] = {
+                'status': 'healthy' if is_healthy else 'unhealthy',
+                'info': redis_info
+            }
+            if not is_healthy:
+                health_status['status'] = 'degraded'
+        except Exception as e:
+            health_status['services']['redis'] = {
+                'status': 'unhealthy',
+                'error': str(e)
+            }
+            health_status['status'] = 'degraded'
+    else:
+        health_status['services']['redis'] = {
+            'status': 'not_configured',
+            'note': 'Redis not available - some features may be limited'
+        }
+    
+    # Active jobs count
+    health_status['active_jobs'] = len(queue_manager.active_jobs)
+    
+    return health_status
+
+@api_router.get("/redis/stats")
+async def get_redis_stats(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get Redis performance statistics (Phase 3)
+    """
+    if not redis_service or not redis_service.is_healthy():
+        raise HTTPException(status_code=503, detail="Redis not available")
+    
+    try:
+        stats = redis_service.get_stats()
+        cache_stats = redis_service.get_cache_stats()
+        redis_info = redis_service.get_info()
+        
+        return {
+            'cache_performance': cache_stats,
+            'general_stats': stats,
+            'redis_info': redis_info,
+            'active_jobs_in_redis': len(redis_service.get_active_jobs())
+        }
+    except Exception as e:
+        logger.error(f"Failed to get Redis stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/redis/cache/invalidate/{email}")
+async def invalidate_cache(
+    email: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Manually invalidate cache for specific email
+    """
+    if not redis_service or not redis_service.is_healthy():
+        raise HTTPException(status_code=503, detail="Redis not available")
+    
+    try:
+        success = redis_service.invalidate_email_cache(email, current_user['id'])
+        
+        if success:
+            return {'message': f'Cache invalidated for {email}'}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to invalidate cache")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to invalidate cache: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router in the main app
 app.include_router(api_router)
 
