@@ -1,0 +1,15 @@
+[Unit]
+Description=Email Verifier Backend Service
+After=network.target mongodb.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/seo.mj.publicvm.com/backend
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/uvicorn server:socket_app --host 0.0.0.0 --port 9010 --workers 4
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
