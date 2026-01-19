@@ -79,7 +79,7 @@ class VerificationQueue:
         user_domains[domain] = time.time()
     
     async def update_job_progress(self, job_id: str, user_id: str, current_email: str = None):
-        """Update and broadcast job progress with live counter"""
+        """Update and broadcast job progress with live counter - Redis-enhanced"""
         if job_id not in self.active_jobs:
             return
         
@@ -122,6 +122,30 @@ class VerificationQueue:
                 {"id": job_id},
                 {"$set": update_data}
             )
+            
+            # Save job state to Redis for persistence
+            if self.redis and self.redis.is_healthy():
+                self.redis.save_job_state(job_id, job)
+                
+                # Also save to Redis progress for fast reads
+                progress_data = {
+                    'job_id': job_id,
+                    'status': job['status'],
+                    'total_records': job['total_records'],
+                    'processed_records': job['processed_records'],
+                    'valid_count': job['valid_count'],
+                    'invalid_count': job['invalid_count'],
+                    'risky_count': job['risky_count'],
+                    'unknown_count': job['unknown_count'],
+                    'found_count': job.get('found_count', 0),
+                    'not_found_count': job.get('not_found_count', 0),
+                    'error_count': job.get('error_count', 0),
+                    'progress_percentage': round(progress_percentage, 1),
+                    'eta_seconds': job.get('eta_seconds'),
+                    'processing_rate': processing_rate,
+                    'current_email': current_email
+                }
+                self.redis.update_job_progress(job_id, progress_data)
             
             # Broadcast progress via WebSocket with enhanced live counter data
             progress_data = {
