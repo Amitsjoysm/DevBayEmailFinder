@@ -46,8 +46,8 @@ redis_service = init_redis_service(redis_url)
 try:
     if redis_service and redis_service.is_healthy():
         # Use Redis adapter for multi-worker Socket.IO support
-        import socketio.asyncio_manager as socketio_manager
-        mgr = socketio_manager.AsyncRedisManager(redis_url)
+        from socketio import AsyncRedisManager
+        mgr = AsyncRedisManager(redis_url)
         sio = socketio.AsyncServer(
             async_mode='asgi',
             cors_allowed_origins='*',
