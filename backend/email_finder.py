@@ -22,9 +22,10 @@ EMAIL_PATTERNS = [
 ]
 
 class EmailFinder:
-    def __init__(self):
+    def __init__(self, domain_cache_service=None):
         self.verifier = EmailVerifier()
-        self.domain_patterns = {}  # Cache successful patterns per domain
+        self.domain_patterns = {}  # In-memory cache (legacy)
+        self.domain_cache_service = domain_cache_service  # Persistent cache
     
     def calculate_finder_score(self, result: dict) -> int:
         """
