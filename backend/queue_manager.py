@@ -305,8 +305,9 @@ class VerificationQueue:
                 if job['processed_records'] % 5 == 0:
                     await self.update_job_progress(job_id, user_id, current_email=email)
                 
-                # Emit individual result
-                await self.socketio.emit('verification_result', result_doc, room=user_id)
+                # Emit individual result (remove _id to avoid ObjectId serialization error)
+                emit_doc = {k: v for k, v in result_doc.items() if k != '_id'}
+                await self.socketio.emit('verification_result', emit_doc, room=user_id)
                 
             except Exception as e:
                 logger.error(f"Error processing email {email}: {e}")
