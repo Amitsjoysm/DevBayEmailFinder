@@ -42,7 +42,7 @@ def register_and_login():
         }
         
         response = requests.post(f"{BASE_URL}/auth/register", json=register_data)
-        if response.status_code == 201:
+        if response.status_code in [200, 201]:
             data = response.json()
             token = data['access_token']
             print(f"✅ Registered and authenticated as: {data['user']['email']}")
