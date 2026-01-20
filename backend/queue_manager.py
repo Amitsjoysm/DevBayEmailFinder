@@ -394,6 +394,7 @@ class VerificationQueue:
                     'id': str(uuid.uuid4()),
                     'job_id': job_id,
                     'user_id': user_id,
+                    'row_index': row_index,  # Track original CSV row order
                     'first_name': first_name,
                     'last_name': last_name,
                     'domain': domain,
