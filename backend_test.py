@@ -642,11 +642,13 @@ class EmailVerificationTester:
         if test_job_id:
             self.test_job_management(test_job_id)
         
-        # Step 8: Results retrieval
+        # Step 8: Results retrieval and CSV export testing
         if verification_job_id:
             self.test_results_retrieval(verification_job_id, "verification")
+            self.test_csv_export_functionality(verification_job_id, "verification")
         if finder_job_id:
             self.test_results_retrieval(finder_job_id, "finder")
+            self.test_csv_export_functionality(finder_job_id, "finder")
         
         # Step 9: Settings and proxies
         self.test_settings_and_proxies()
