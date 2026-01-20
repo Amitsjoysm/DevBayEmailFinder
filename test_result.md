@@ -418,7 +418,29 @@ frontend:
         agent: "main"
         comment: "CRITICAL FIX: Fixed pattern caching bug that caused incorrect email matching. Previously, cached patterns would override proper pattern order, causing finder to return wrong person's email (e.g., john@domain.com instead of john.doe@domain.com). Updated generate_email_variants() to ALWAYS check patterns in priority order: first.last@domain FIRST, then other patterns. Cached pattern is prioritized but never excludes other patterns. Ensures correct person is found even with duplicate first names at same domain."
 
-  - task: "Live Counter with Processing Rate"
+  - task: "Domain Pattern Caching for Finder"
+    implemented: true
+    working: true
+    file: "email_finder.py, domain_cache_service.py, server.py, models.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "IMPLEMENTED: Phase 1 & 2 complete. Added persistent domain pattern caching with MongoDB storage. Features: 
+        ✅ Phase 1: first.last@domain pattern always tested first with detailed logging
+        ✅ Phase 2: Persistent domain pattern cache with DomainPatternCache model
+        ✅ DomainCacheService with get/save/search/delete operations
+        ✅ Confidence scoring based on success_count (50-100 range)
+        ✅ Pattern effectiveness tracking with success_count, timestamps
+        ✅ 5 new API endpoints: GET /api/domain-cache/stats, GET /api/domain-cache/search, GET /api/domain-cache/{domain}, DELETE /api/domain-cache/{domain}, POST /api/domain-cache/clear-all
+        ✅ Integrated with EmailFinder - checks persistent cache before pattern generation
+        ✅ Auto-saves successful patterns to both in-memory and persistent cache
+        ✅ Includes last_example with email/name for reference
+        ✅ Tracks pattern changes over time
+        Files: email_finder.py (enhanced logging, async cache lookup), domain_cache_service.py (new), models.py (DomainPatternCache), server.py (endpoints, initialization), queue_manager.py (user_id passthrough)"
+
     implemented: true
     working: true
     file: "queue_manager.py, Verifier.js, Finder.js"
