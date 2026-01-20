@@ -186,7 +186,7 @@ class VerificationQueue:
         except Exception as e:
             logger.error(f"Failed to update job progress: {e}")
     
-    async def process_verification_batch(self, job_id: str, user_id: str, emails: List[str], settings: dict):
+    async def process_verification_batch(self, job_id: str, user_id: str, emails: List, settings: dict):
         """Process a batch of email verifications with ledger caching and retry support"""
         if job_id not in self.active_jobs:
             return
@@ -194,7 +194,14 @@ class VerificationQueue:
         job_state = self.active_jobs[job_id]
         job = job_state['job']
         
-        for email in emails:
+        for email_data in emails:
+            # Handle both string format (old) and dict format (new with row_index)
+            if isinstance(email_data, dict):
+                email = email_data['email']
+                row_index = email_data.get('row_index', 0)
+            else:
+                email = email_data
+                row_index = 0
             try:
                 if job['status'] == JobStatus.PAUSED:
                     break
