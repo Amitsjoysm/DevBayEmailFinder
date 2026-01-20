@@ -566,6 +566,49 @@ test_plan:
         
         This ensures CSV exports work correctly for bulk verification and finder results regardless of which fields are populated in each result."
 
+  - task: "CSV Export Column Order & Row Preservation"
+    implemented: true
+    working: true
+    file: "models.py, server.py, queue_manager.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reported two issues: 1) Column sequence changes in every export file 2) Results order doesn't match input CSV order"
+      - working: true
+        agent: "main"
+        comment: "CRITICAL FIX IMPLEMENTED:
+        
+        ✅ Redis installed and running (localhost:6379)
+        ✅ All services restarted and running
+        
+        Issue 1 - Column Sequence Changing:
+        - Root cause: export_results used sorted() which alphabetically sorted columns
+        - Solution: Defined fixed, logical column order for both verification and finder exports
+        - Verification columns: row_index, email, status, provider, deliverability_score, etc.
+        - Finder columns: row_index, first_name, last_name, domain, found, email, etc.
+        - Gracefully handles both old and new schemas
+        
+        Issue 2 - Results Not in Input File Order:
+        - Root cause: No field to track original CSV row order
+        - Solution: Added row_index field to track original position
+        
+        Changes Made:
+        ✅ models.py: Added row_index field to VerificationResult and FinderResult models
+        ✅ server.py /verify/upload: Track row_index when parsing CSV (0-based index)
+        ✅ server.py /find/upload: Track row_index when parsing CSV (0-based index)
+        ✅ queue_manager.py process_verification_batch: Extract and store row_index in result_doc
+        ✅ queue_manager.py process_finder_batch: Extract and store row_index in finder_doc
+        ✅ server.py export_results: Sort results by row_index before CSV export
+        ✅ server.py export_results: Use fixed column order instead of sorted()
+        
+        Result:
+        - CSV exports now maintain consistent column order across all downloads
+        - Results now appear in same order as input CSV file
+        - Backward compatible with existing results (row_index defaults to 0)"
+
 agent_communication:
   - agent: "main"
     message: "Initial codebase analysis complete. Identified 3 critical missing features: 1) Bulk Email Finder, 2) Retry Mechanism, 3) Better error handling. Services are running. Ready to implement after user confirmation."
