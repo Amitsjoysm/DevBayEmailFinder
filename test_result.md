@@ -460,11 +460,11 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Domain Pattern Caching - Test with first.last@domain.com pattern priority"
-    - "Domain Pattern Caching - Test persistent cache save/retrieve"
-    - "Domain Pattern Caching - Test cache endpoints (stats, search, lookup)"
-    - "Domain Pattern Caching - Test bulk finder with domain caching"
-    - "Domain Pattern Caching - Test cache persistence after server restart"
+    - "CSV Export Bug Fix - Test bulk verification CSV export with mixed field results"
+    - "CSV Export Bug Fix - Test bulk finder CSV export with optional fields"
+    - "CSV Export Bug Fix - Verify enum serialization in CSV (status, provider)"
+    - "CSV Export Bug Fix - Verify datetime serialization in CSV"
+    - "CSV Export Bug Fix - Test export with status filter parameter"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
