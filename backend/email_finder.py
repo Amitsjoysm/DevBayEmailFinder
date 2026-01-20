@@ -152,7 +152,7 @@ class EmailFinder:
                         found_email = email
                         logger.info(f"✅ SUCCESS! Found valid email: {email} on attempt {idx}/{len(emails)}")
                         
-                        # Cache successful pattern for this domain
+                        # Determine which pattern matched
                         for pattern in EMAIL_PATTERNS:
                             try:
                                 test_email = pattern.format(
@@ -164,7 +164,24 @@ class EmailFinder:
                                 )
                                 if test_email == email:
                                     found_pattern = pattern
+                                    
+                                    # Save to in-memory cache (legacy)
                                     self.domain_patterns[domain] = pattern
+                                    
+                                    # Save to persistent cache (database)
+                                    if self.domain_cache_service and user_id:
+                                        try:
+                                            await self.domain_cache_service.save_domain_pattern(
+                                                domain=domain,
+                                                pattern=pattern,
+                                                user_id=user_id,
+                                                email_found=email,
+                                                first_name=first_name,
+                                                last_name=last_name
+                                            )
+                                        except Exception as e:
+                                            logger.error(f"Failed to save to persistent cache: {e}")
+                                    
                                     logger.info(f"💾 Cached pattern for {domain}: {pattern}")
                                     if pattern == '{first}.{last}@{domain}':
                                         logger.info(f"⭐ CONFIRMED: first.last@domain pattern works for {domain}")
