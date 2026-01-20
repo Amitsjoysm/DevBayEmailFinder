@@ -93,6 +93,7 @@ class VerificationResult(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     job_id: str
     user_id: str
+    row_index: int = 0  # Track original CSV row order
     email: EmailStr
     first_name: Optional[str] = None
     last_name: Optional[str] = None
