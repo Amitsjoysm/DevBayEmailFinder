@@ -61,8 +61,8 @@ class EmailFinder:
         
         return score
     
-    def generate_email_variants(self, first_name: str, last_name: str, domain: str, patterns: Optional[List[str]] = None) -> List[str]:
-        """Generate email variants based on patterns - ALWAYS checks in priority order"""
+    async def generate_email_variants_with_cache(self, first_name: str, last_name: str, domain: str, patterns: Optional[List[str]] = None) -> List[str]:
+        """Generate email variants with persistent domain cache lookup"""
         first = first_name.lower().strip()
         last = last_name.lower().strip()
         f = first[0] if first else ''
@@ -73,12 +73,22 @@ class EmailFinder:
         
         logger.info(f"🔍 Generating email variants for {first_name} {last_name} @ {domain}")
         
-        # CRITICAL FIX: Always check patterns in order, prioritizing cached pattern
-        # but never excluding other patterns to ensure first.last@domain is checked before first@domain
         cached_pattern = None
-        if domain in self.domain_patterns:
+        
+        # Check persistent cache first (database)
+        if self.domain_cache_service:
+            try:
+                cache_entry = await self.domain_cache_service.get_domain_pattern(domain)
+                if cache_entry:
+                    cached_pattern = cache_entry['pattern']
+                    logger.info(f"✅ Found PERSISTENT cached pattern for {domain}: {cached_pattern} (confidence: {cache_entry.get('confidence_score', 0)})")
+            except Exception as e:
+                logger.error(f"Error fetching from persistent cache: {e}")
+        
+        # Fallback to in-memory cache if no persistent cache
+        if not cached_pattern and domain in self.domain_patterns:
             cached_pattern = self.domain_patterns[domain]
-            logger.info(f"✅ Found cached pattern for {domain}: {cached_pattern}")
+            logger.info(f"✅ Found IN-MEMORY cached pattern for {domain}: {cached_pattern}")
         
         # If we have a cached pattern, put it first, then all others in order
         if cached_pattern and cached_pattern in use_patterns:
@@ -115,6 +125,7 @@ class EmailFinder:
         
         logger.info(f"📋 Generated {len(emails)} email variants, testing in order")
         return emails
+    
     
     async def find_email(self, first_name: str, last_name: str, domain: str, 
                         patterns: Optional[List[str]] = None, 
