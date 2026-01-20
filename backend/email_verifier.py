@@ -322,6 +322,32 @@ class EmailVerifier:
             
             result['response_time'] = time.time() - start_time
             
+            # Intelligent status adjustment for UNKNOWN emails
+            # If SMTP returns UNKNOWN but email has valid MX records and proper format,
+            # it's likely valid (just cautious SMTP server)
+            if result['status'] == VerificationStatus.UNKNOWN:
+                # Check if we have strong indicators of validity
+                has_valid_mx = mx_records and len(mx_records) > 0
+                has_good_format = self.is_valid_email_format(email)
+                is_reputable_provider = result['provider'] in [
+                    EmailProvider.GMAIL, EmailProvider.GSUITE,
+                    EmailProvider.O365, EmailProvider.OUTLOOK,
+                    EmailProvider.YAHOO, EmailProvider.ZOHO
+                ]
+                
+                # For reputable providers with valid MX, UNKNOWN likely means VALID
+                # (they often don't reveal email existence for privacy)
+                if is_reputable_provider and has_valid_mx and has_good_format:
+                    result['status'] = VerificationStatus.VALID
+                    result['smtp_response'] += ' (Adjusted: Reputable provider with valid MX)'
+                
+                # For custom domains with valid MX and fast response, likely VALID
+                elif has_valid_mx and has_good_format and result['response_time'] < 3.0:
+                    # If server responded quickly but said UNKNOWN, it's probably valid
+                    # (many custom domains use greylisting or privacy protection)
+                    result['status'] = VerificationStatus.VALID
+                    result['smtp_response'] += ' (Adjusted: Valid MX, fast response, likely valid)'
+            
             # Calculate deliverability score
             result['deliverability_score'] = self.calculate_deliverability_score(result)
             
