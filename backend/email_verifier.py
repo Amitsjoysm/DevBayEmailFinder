@@ -279,6 +279,7 @@ class EmailVerifier:
                 result['smtp_response'] = 'Invalid email format'
                 result['error_message'] = 'Email format is invalid'
                 result['response_time'] = time.time() - start_time
+                result['deliverability_score'] = self.calculate_deliverability_score(result)
                 return result
             
             # Check disposable
@@ -287,6 +288,7 @@ class EmailVerifier:
                 result['status'] = VerificationStatus.DISPOSABLE
                 result['smtp_response'] = 'Disposable email provider'
                 result['response_time'] = time.time() - start_time
+                result['deliverability_score'] = self.calculate_deliverability_score(result)
                 return result
             
             # Check role-based
