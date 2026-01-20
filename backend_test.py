@@ -14,10 +14,10 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 # Configuration
-BASE_URL = "https://email-sync-redis.preview.emergentagent.com/api"
-TEST_USER_EMAIL = "testuser@example.com"
-TEST_USER_PASSWORD = "testpassword123"
-TEST_USER_NAME = "Test User"
+BASE_URL = "https://localhost:9010/api"
+TEST_USER_EMAIL = "sarah.johnson@example.com"
+TEST_USER_PASSWORD = "securepass456"
+TEST_USER_NAME = "Sarah Johnson"
 
 class EmailVerificationTester:
     def __init__(self):
