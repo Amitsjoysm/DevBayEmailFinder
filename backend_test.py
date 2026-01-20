@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 # Configuration
-BASE_URL = "https://localhost:9010/api"
+BASE_URL = "http://localhost:8001/api"
 TEST_USER_EMAIL = "sarah.johnson@example.com"
 TEST_USER_PASSWORD = "securepass456"
 TEST_USER_NAME = "Sarah Johnson"
