@@ -130,12 +130,13 @@ class EmailFinder:
     async def find_email(self, first_name: str, last_name: str, domain: str, 
                         patterns: Optional[List[str]] = None, 
                         stop_on_first_valid: bool = True,
-                        proxy: dict = None) -> dict:
-        """Find and verify email using pattern matching"""
+                        proxy: dict = None,
+                        user_id: str = None) -> dict:
+        """Find and verify email using pattern matching with persistent cache"""
         start_time = time.time()
         
         try:
-            emails = self.generate_email_variants(first_name, last_name, domain, patterns)
+            emails = await self.generate_email_variants_with_cache(first_name, last_name, domain, patterns)
             
             results = []
             found_email = None
