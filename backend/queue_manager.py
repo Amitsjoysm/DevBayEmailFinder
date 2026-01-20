@@ -341,6 +341,7 @@ class VerificationQueue:
                 first_name = record.get('first_name', '')
                 last_name = record.get('last_name', '')
                 domain = record.get('domain', '')
+                row_index = record.get('row_index', 0)  # Track original CSV row order
                 
                 if not first_name or not last_name or not domain:
                     logger.warning(f"Skipping invalid record: {record}")
