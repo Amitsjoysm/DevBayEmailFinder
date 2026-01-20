@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 # Configuration
-BASE_URL = "https://redis-email-finder.preview.emergentagent.com/api"
+BASE_URL = "https://sync-finder-cache.preview.emergentagent.com/api"
 TEST_USER_EMAIL = "testuser@example.com"
 TEST_USER_PASSWORD = "testpassword123"
 TEST_USER_NAME = "Test User"
