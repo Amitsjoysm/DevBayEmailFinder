@@ -13,6 +13,21 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def serialize_result_for_cache(result: dict) -> dict:
+    """Serialize result dictionary for Redis caching by converting Enums and datetime objects"""
+    serialized = {}
+    for key, value in result.items():
+        if isinstance(value, (VerificationStatus, EmailProvider, JobStatus)):
+            serialized[key] = value.value
+        elif isinstance(value, datetime):
+            serialized[key] = value.isoformat()
+        elif hasattr(value, '__dict__') and not isinstance(value, (str, int, float, bool, list, dict, type(None))):
+            # Handle any other complex objects
+            serialized[key] = str(value)
+        else:
+            serialized[key] = value
+    return serialized
+
 class VerificationQueue:
     def __init__(self, db, socketio, redis_service: Optional[RedisService] = None):
         self.db = db
