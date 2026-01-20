@@ -815,10 +815,32 @@ async def export_results(
         # Create CSV
         output = io.StringIO()
         if results:
-            fieldnames = results[0].keys()
+            # Collect ALL unique fieldnames from ALL results
+            all_fieldnames = set()
+            for result in results:
+                all_fieldnames.update(result.keys())
+            
+            # Sort fieldnames for consistent output (optional but nice)
+            fieldnames = sorted(all_fieldnames)
+            
+            # Serialize enum values and other non-string types to strings
+            serialized_results = []
+            for result in results:
+                serialized_result = {}
+                for key, value in result.items():
+                    if hasattr(value, 'value'):  # Handle Enum objects
+                        serialized_result[key] = value.value
+                    elif isinstance(value, datetime):  # Handle datetime objects
+                        serialized_result[key] = value.isoformat()
+                    elif isinstance(value, list):  # Handle lists
+                        serialized_result[key] = ', '.join(str(v) for v in value)
+                    else:
+                        serialized_result[key] = value
+                serialized_results.append(serialized_result)
+            
             writer = csv.DictWriter(output, fieldnames=fieldnames)
             writer.writeheader()
-            writer.writerows(results)
+            writer.writerows(serialized_results)
         
         output.seek(0)
         return StreamingResponse(
