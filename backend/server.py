@@ -332,7 +332,11 @@ async def upload_verification_csv(
                     
                     # Basic email format validation
                     if '@' in email_clean and '.' in email_clean.split('@')[-1]:
-                        emails.append(email_clean)
+                        # Store email with row index for preserving order
+                        emails.append({
+                            'email': email_clean,
+                            'row_index': len(emails)  # Use current list length as 0-based index
+                        })
                     else:
                         invalid_rows.append(f"Row {idx}: Invalid email format '{email_clean}'")
                         
