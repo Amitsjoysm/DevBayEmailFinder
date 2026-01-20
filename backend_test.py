@@ -396,6 +396,133 @@ class EmailVerificationTester:
         else:
             self.log_test("Results Retrieval", False, 
                         f"Failed to get results: {response}", response)
+
+    def test_csv_export_functionality(self, job_id: str, job_type: str):
+        """Test CSV export functionality fix - comprehensive testing"""
+        if not job_id:
+            return
+            
+        print(f"\n=== TESTING CSV EXPORT FIX FOR {job_id} ({job_type}) ===")
+        
+        # Test 1: CSV Export without filter
+        print("Testing CSV export without filter...")
+        status, csv_response = self.make_csv_request("GET", f"/results/{job_id}/export", 
+                                                   params={"format": "csv"})
+        
+        if status == 200:
+            # Parse CSV to verify structure
+            csv_content = csv_response
+            if isinstance(csv_content, str):
+                csv_reader = csv.DictReader(io.StringIO(csv_content))
+                fieldnames = csv_reader.fieldnames
+                rows = list(csv_reader)
+                
+                # Verify CSV has proper structure
+                if fieldnames and len(rows) > 0:
+                    self.log_test("CSV Export Structure", True, 
+                                f"CSV has {len(fieldnames)} columns, {len(rows)} rows")
+                    
+                    # Check for enum serialization (status, provider should be strings)
+                    enum_fields_found = []
+                    datetime_fields_found = []
+                    
+                    for row in rows:
+                        # Check for status field (should be string, not enum)
+                        if 'status' in row and row['status']:
+                            if not isinstance(row['status'], str) or row['status'].startswith('<'):
+                                self.log_test("Enum Serialization - Status", False, 
+                                            f"Status not properly serialized: {row['status']}")
+                            else:
+                                enum_fields_found.append('status')
+                        
+                        # Check for provider field (should be string, not enum)
+                        if 'provider' in row and row['provider']:
+                            if not isinstance(row['provider'], str) or row['provider'].startswith('<'):
+                                self.log_test("Enum Serialization - Provider", False, 
+                                            f"Provider not properly serialized: {row['provider']}")
+                            else:
+                                enum_fields_found.append('provider')
+                        
+                        # Check for datetime fields (should be ISO format strings)
+                        for field in ['created_at', 'verified_at', 'last_verified_at']:
+                            if field in row and row[field]:
+                                if 'T' in row[field] and ('Z' in row[field] or '+' in row[field]):
+                                    datetime_fields_found.append(field)
+                                else:
+                                    self.log_test(f"Datetime Serialization - {field}", False, 
+                                                f"Datetime not in ISO format: {row[field]}")
+                    
+                    if enum_fields_found:
+                        self.log_test("Enum Serialization", True, 
+                                    f"Enum fields properly serialized: {set(enum_fields_found)}")
+                    
+                    if datetime_fields_found:
+                        self.log_test("Datetime Serialization", True, 
+                                    f"Datetime fields in ISO format: {set(datetime_fields_found)}")
+                    
+                    # Verify all fieldnames are present (the main bug fix)
+                    expected_fields = set()
+                    for row in rows:
+                        expected_fields.update(row.keys())
+                    
+                    if set(fieldnames) == expected_fields:
+                        self.log_test("CSV Fieldnames Complete", True, 
+                                    f"All {len(fieldnames)} fields present in header")
+                    else:
+                        missing = expected_fields - set(fieldnames)
+                        self.log_test("CSV Fieldnames Complete", False, 
+                                    f"Missing fields in header: {missing}")
+                else:
+                    self.log_test("CSV Export Structure", False, "CSV is empty or malformed")
+            else:
+                self.log_test("CSV Export Structure", False, "CSV response is not a string")
+        else:
+            self.log_test("CSV Export", False, f"CSV export failed: {csv_response}")
+        
+        # Test 2: JSON Export (should still work)
+        print("Testing JSON export...")
+        status, response = self.make_request("GET", f"/results/{job_id}/export", 
+                                           params={"format": "json"})
+        
+        if status == 200 and isinstance(response, list):
+            self.log_test("JSON Export", True, f"JSON export works: {len(response)} records")
+        else:
+            self.log_test("JSON Export", False, f"JSON export failed: {response}")
+        
+        # Test 3: CSV Export with status filter (if verification job)
+        if job_type == "verification":
+            print("Testing CSV export with status filter...")
+            status, csv_response = self.make_csv_request("GET", f"/results/{job_id}/export", 
+                                                       params={"format": "csv", "status": "valid"})
+            
+            if status == 200:
+                self.log_test("CSV Export with Filter", True, "CSV export with status filter works")
+            else:
+                self.log_test("CSV Export with Filter", False, f"Filtered CSV export failed: {csv_response}")
+
+    def make_csv_request(self, method: str, endpoint: str, params: dict = None) -> tuple:
+        """Make HTTP request expecting CSV response"""
+        url = f"{self.base_url}{endpoint}"
+        headers = self.headers.copy()
+        
+        try:
+            if method.upper() == "GET":
+                response = requests.get(url, headers=headers, params=params, timeout=30)
+            else:
+                raise ValueError(f"Unsupported method for CSV: {method}")
+            
+            # For CSV, return the text content directly
+            if response.headers.get('content-type', '').startswith('text/csv'):
+                return response.status_code, response.text
+            else:
+                # Try to parse as JSON if not CSV
+                try:
+                    return response.status_code, response.json()
+                except:
+                    return response.status_code, response.text
+                    
+        except requests.exceptions.RequestException as e:
+            return 500, {"error": str(e)}
     
     def test_settings_and_proxies(self):
         """Test settings and proxy management"""
