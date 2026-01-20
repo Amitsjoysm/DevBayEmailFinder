@@ -893,9 +893,17 @@ async def get_settings(
     )
     
     if not settings:
-        settings = UserSettings(user_id=current_user['id']).model_dump()
+        settings_obj = UserSettings(user_id=current_user['id'])
+        settings = settings_obj.model_dump()
         settings['updated_at'] = settings['updated_at'].isoformat()
-        await db.user_settings.insert_one(settings)
+        # Insert into DB but don't use the returned dict
+        await db.user_settings.insert_one(settings.copy())
+        # Remove _id if it was added
+        settings.pop('_id', None)
+    
+    # Ensure _id is never in response
+    if '_id' in settings:
+        del settings['_id']
     
     return settings
 
