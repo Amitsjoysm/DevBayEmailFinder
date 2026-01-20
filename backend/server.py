@@ -422,7 +422,8 @@ async def find_single_email(
         request.last_name,
         request.domain,
         patterns=request.patterns,
-        stop_on_first_valid=True
+        stop_on_first_valid=True,
+        user_id=current_user['id']
     )
     return result
 
