@@ -127,14 +127,18 @@ class EmailFinder:
             
             results = []
             found_email = None
+            found_pattern = None
             
-            for email in emails:
+            for idx, email in enumerate(emails, 1):
                 try:
+                    logger.info(f"🔍 Testing pattern {idx}/{len(emails)}: {email}")
                     verification_result = await self.verifier.verify_email(email, use_api_fallback=True, proxy=proxy)
                     results.append(verification_result)
                     
                     if verification_result['status'] == VerificationStatus.VALID:
                         found_email = email
+                        logger.info(f"✅ SUCCESS! Found valid email: {email} on attempt {idx}/{len(emails)}")
+                        
                         # Cache successful pattern for this domain
                         for pattern in EMAIL_PATTERNS:
                             try:
@@ -146,15 +150,22 @@ class EmailFinder:
                                     domain=domain
                                 )
                                 if test_email == email:
+                                    found_pattern = pattern
                                     self.domain_patterns[domain] = pattern
+                                    logger.info(f"💾 Cached pattern for {domain}: {pattern}")
+                                    if pattern == '{first}.{last}@{domain}':
+                                        logger.info(f"⭐ CONFIRMED: first.last@domain pattern works for {domain}")
                                     break
                             except:
                                 continue
                         
                         if stop_on_first_valid:
                             break
+                    else:
+                        logger.info(f"❌ Pattern {idx} failed: {email} -> {verification_result['status']}")
                 except Exception as e:
                     # Continue to next pattern on error
+                    logger.error(f"⚠️ Error testing {email}: {str(e)}")
                     results.append({
                         'email': email,
                         'status': VerificationStatus.UNKNOWN,
@@ -169,6 +180,7 @@ class EmailFinder:
                 'last_name': last_name,
                 'domain': domain,
                 'patterns_tested': len(results),
+                'found_pattern': found_pattern,
                 'all_results': results,
                 'search_time': time.time() - start_time,
                 'error_message': None,
@@ -178,8 +190,14 @@ class EmailFinder:
             # Calculate deliverability score
             result['deliverability_score'] = self.calculate_finder_score(result)
             
+            if found_email:
+                logger.info(f"🎉 Email found in {result['search_time']:.2f}s after testing {len(results)} patterns")
+            else:
+                logger.info(f"😞 No valid email found after testing {len(results)} patterns in {result['search_time']:.2f}s")
+            
             return result
         except Exception as e:
+            logger.error(f"💥 Finder error: {str(e)}")
             return {
                 'found': False,
                 'email': None,
@@ -187,6 +205,7 @@ class EmailFinder:
                 'last_name': last_name,
                 'domain': domain,
                 'patterns_tested': 0,
+                'found_pattern': None,
                 'all_results': [],
                 'search_time': time.time() - start_time,
                 'error_message': f'Finder error: {str(e)}',
