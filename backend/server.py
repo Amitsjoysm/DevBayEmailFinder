@@ -536,7 +536,8 @@ async def upload_finder_csv(
                         records.append({
                             'first_name': first_clean,
                             'last_name': last_clean,
-                            'domain': domain_clean
+                            'domain': domain_clean,
+                            'row_index': len(records)  # Track original row order
                         })
                     else:
                         invalid_rows.append(f"Row {idx}: Invalid domain format '{domain}'")
