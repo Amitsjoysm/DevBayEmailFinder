@@ -1125,6 +1125,7 @@ logger = logging.getLogger(__name__)
 async def startup_db():
     """Initialize database indexes and recover jobs on startup"""
     await ledger_service.initialize()
+    await domain_cache_service.initialize()
     
     # Recover active jobs from Redis (Phase 1 - Critical for preventing job loss)
     if redis_service and redis_service.is_healthy():
