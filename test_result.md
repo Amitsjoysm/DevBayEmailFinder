@@ -534,6 +534,38 @@ test_plan:
         
         This ensures accurate person matching even when multiple people with same first name exist at a domain."
 
+  - task: "CSV Export Bug Fix for Bulk Results"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reported error when exporting bulk email finder results: ValueError: dict contains fields not in fieldnames: 'provider', 'status'. Error occurred in server.py line 817 in export_results function."
+      - working: true
+        agent: "main"
+        comment: "CRITICAL FIX IMPLEMENTED:
+        ✅ Redis server installed and running (version 7.0.15)
+        ✅ All dependencies installed
+        ✅ Fixed CSV export bug in export_results endpoint (line 814-843)
+        
+        Root Cause:
+        - CSV writer only collected fieldnames from first result (results[0].keys())
+        - Subsequent results had additional fields (provider, status) not in first result
+        - DictWriter raised ValueError when trying to write fields not in fieldnames
+        
+        Solution:
+        ✅ Collect ALL unique fieldnames from ALL results before creating DictWriter
+        ✅ Added proper serialization for Enum objects (VerificationStatus, EmailProvider) → string values
+        ✅ Added datetime serialization → ISO format strings
+        ✅ Added list serialization → comma-separated strings
+        ✅ Applied to both verification and finder result exports
+        
+        This ensures CSV exports work correctly for bulk verification and finder results regardless of which fields are populated in each result."
+
 agent_communication:
   - agent: "main"
     message: "Initial codebase analysis complete. Identified 3 critical missing features: 1) Bulk Email Finder, 2) Retry Mechanism, 3) Better error handling. Services are running. Ready to implement after user confirmation."
