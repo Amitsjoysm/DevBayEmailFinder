@@ -302,6 +302,7 @@ class EmailVerifier:
                 result['smtp_response'] = 'No MX records found'
                 result['error_message'] = 'Domain has no valid MX records'
                 result['response_time'] = time.time() - start_time
+                result['deliverability_score'] = self.calculate_deliverability_score(result)
                 return result
             
             # Detect provider
