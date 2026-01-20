@@ -87,7 +87,8 @@ api_router = APIRouter(prefix="/api")
 
 # Initialize services
 verifier = EmailVerifier()
-finder = EmailFinder()
+domain_cache_service = DomainCacheService(db)
+finder = EmailFinder(domain_cache_service=domain_cache_service)
 queue_manager = VerificationQueue(db, sio, redis_service)
 ledger_service = LedgerService(db)
 
