@@ -349,7 +349,8 @@ class VerificationQueue:
                     last_name, 
                     domain,
                     stop_on_first_valid=settings.get('stop_on_first_valid', True),
-                    proxy=proxy
+                    proxy=proxy,
+                    user_id=user_id
                 )
                 
                 # If email was found, save to ledger
