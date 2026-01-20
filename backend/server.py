@@ -996,6 +996,100 @@ async def get_ledger_entry(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+# ============================================================================
+# Domain Pattern Cache Endpoints
+# ============================================================================
+
+@api_router.get("/domain-cache/stats")
+async def get_domain_cache_stats(
+    domain: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get domain pattern cache statistics
+    
+    - If domain provided: get stats for specific domain
+    - If no domain: get overall cache statistics
+    """
+    try:
+        stats = await domain_cache_service.get_pattern_stats(domain)
+        return stats
+    except Exception as e:
+        logger.error(f"Failed to get domain cache stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/domain-cache/search")
+async def search_domain_cache(
+    query: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    current_user: dict = Depends(get_current_user)
+):
+    """Search cached domains"""
+    try:
+        results = await domain_cache_service.search_cached_domains(query, limit, skip)
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        logger.error(f"Failed to search domain cache: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/domain-cache/{domain}")
+async def get_domain_cache_entry(
+    domain: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get cached pattern for specific domain"""
+    try:
+        entry = await domain_cache_service.get_domain_pattern(domain)
+        if not entry:
+            raise HTTPException(status_code=404, detail=f"No cached pattern found for domain: {domain}")
+        return entry
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get domain cache entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/domain-cache/{domain}")
+async def delete_domain_cache_entry(
+    domain: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete cached pattern for specific domain"""
+    try:
+        success = await domain_cache_service.delete_domain_cache(domain)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"No cached pattern found for domain: {domain}")
+        return {"message": f"Cache cleared for domain: {domain}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete domain cache: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/domain-cache/clear-all")
+async def clear_all_domain_cache(
+    current_user: dict = Depends(get_current_user)
+):
+    """Clear all domain cache entries (use with caution)"""
+    try:
+        # Only allow admins to clear all cache
+        if current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        success = await domain_cache_service.clear_all_cache()
+        if success:
+            return {"message": "All domain cache entries cleared successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to clear cache")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to clear all domain cache: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================================
 # Health Check & Monitoring Endpoints (Phase 3)
 # ============================================================================
