@@ -257,7 +257,8 @@ class VerificationQueue:
                     
                     # Save to Redis cache (L1) for fast access
                     if self.redis and self.redis.is_healthy():
-                        self.redis.cache_email_result(email, user_id, result)
+                        serialized_result = serialize_result_for_cache(result)
+                        self.redis.cache_email_result(email, user_id, serialized_result)
                     
                     # Save to MongoDB ledger (L2) for long-term storage
                     await self.ledger.save_to_ledger(email, user_id, result, source="verification", job_id=job_id)
