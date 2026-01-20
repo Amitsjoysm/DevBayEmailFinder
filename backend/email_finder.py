@@ -1,11 +1,15 @@
 from typing import List, Optional
 import asyncio
 import time
+import logging
 from email_verifier import EmailVerifier
 from models import VerificationStatus
 
+logger = logging.getLogger(__name__)
+
+# PRIORITY PATTERN: first.last@domain is tested FIRST always
 EMAIL_PATTERNS = [
-    '{first}.{last}@{domain}',
+    '{first}.{last}@{domain}',  # PRIORITY: Most common professional format
     '{first}{last}@{domain}',
     '{first}@{domain}',
     '{last}@{domain}',
