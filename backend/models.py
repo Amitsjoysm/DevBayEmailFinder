@@ -166,6 +166,7 @@ class FinderResult(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     job_id: str
     user_id: str
+    row_index: int = 0  # Track original CSV row order
     first_name: str
     last_name: str
     domain: str
