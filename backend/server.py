@@ -19,7 +19,8 @@ from models import (
     VerificationJob, VerificationResult, JobProgress, JobStatus,
     EmailVerificationRequest, EmailFinderRequest, BulkVerificationRequest,
     Proxy, ProxyCreate, UserSettings, ExportRequest,
-    VerificationStatus, EmailProvider, FinderResult, BulkFinderRequest, EmailLedger
+    VerificationStatus, EmailProvider, FinderResult, BulkFinderRequest, EmailLedger,
+    DomainPatternCache
 )
 from auth import (
     get_password_hash, verify_password, create_access_token, get_current_user
@@ -28,6 +29,7 @@ from email_verifier import EmailVerifier
 from email_finder import EmailFinder
 from queue_manager import VerificationQueue
 from ledger_service import LedgerService
+from domain_cache_service import DomainCacheService
 from redis_service import init_redis_service, get_redis_service
 
 ROOT_DIR = Path(__file__).parent
