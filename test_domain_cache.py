@@ -13,30 +13,44 @@ BASE_URL = "http://localhost:8001/api"
 
 def register_and_login():
     """Register/login to get auth token"""
-    email = f"test_cache_{int(time.time())}@example.com"
-    password = "TestPassword123!"
     
-    # Register
-    register_data = {
-        "email": email,
-        "password": password,
-        "full_name": "Cache Test User"
-    }
+    # Try existing test user first
+    test_email = "test@example.com"
+    test_password = "password123"
+    
+    print(f"🔐 Attempting login with {test_email}...")
     
     try:
-        response = requests.post(f"{BASE_URL}/auth/register", json=register_data)
-        if response.status_code != 201:
-            # Try login instead
-            login_data = {"email": "test@example.com", "password": "password123"}
-            response = requests.post(f"{BASE_URL}/auth/login", json=login_data)
-            if response.status_code != 200:
-                print(f"❌ Login failed: {response.status_code}")
-                return None
+        login_data = {"email": test_email, "password": test_password}
+        response = requests.post(f"{BASE_URL}/auth/login", json=login_data)
         
-        data = response.json()
-        token = data['access_token']
-        print(f"✅ Authenticated as: {data['user']['email']}")
-        return token
+        if response.status_code == 200:
+            data = response.json()
+            token = data['access_token']
+            print(f"✅ Authenticated as: {data['user']['email']}")
+            return token
+        
+        # If login failed, try to register
+        print(f"⚠️  Login failed, attempting registration...")
+        email = f"test_cache_{int(time.time())}@example.com"
+        password = "TestPassword123!"
+        
+        register_data = {
+            "email": email,
+            "password": password,
+            "full_name": "Cache Test User"
+        }
+        
+        response = requests.post(f"{BASE_URL}/auth/register", json=register_data)
+        if response.status_code == 201:
+            data = response.json()
+            token = data['access_token']
+            print(f"✅ Registered and authenticated as: {data['user']['email']}")
+            return token
+        else:
+            print(f"❌ Registration failed: {response.status_code} - {response.text}")
+            return None
+            
     except Exception as e:
         print(f"❌ Auth error: {e}")
         return None
