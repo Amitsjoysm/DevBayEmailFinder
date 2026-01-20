@@ -452,7 +452,7 @@ class VerificationQueue:
             'status': 'scheduled'
         })
     
-    async def start_verification_job(self, job_id: str, user_id: str, emails: List[str], settings: dict):
+    async def start_verification_job(self, job_id: str, user_id: str, emails: List, settings: dict):
         """Start a verification job with thread management"""
         try:
             # Load proxies if enabled
