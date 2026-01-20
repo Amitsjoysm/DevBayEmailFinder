@@ -275,6 +275,7 @@ class VerificationQueue:
                     'id': str(uuid.uuid4()),
                     'job_id': job_id,
                     'user_id': user_id,
+                    'row_index': row_index,  # Track original CSV row order
                     'email': email,
                     'status': result['status'].value,
                     'provider': result['provider'].value,
