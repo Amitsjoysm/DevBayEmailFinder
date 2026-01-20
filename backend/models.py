@@ -259,3 +259,20 @@ class EmailLedger(BaseModel):
     # Additional metadata
     user_id: str
     last_job_id: Optional[str] = None
+
+
+# Domain Pattern Cache Model
+class DomainPatternCache(BaseModel):
+    """Persistent cache for successful email patterns per domain"""
+    model_config = ConfigDict(extra="ignore")
+    
+    domain: str  # e.g., "example.com"
+    pattern: str  # e.g., "{first}.{last}@{domain}"
+    success_count: int = 1
+    confidence_score: int = 50  # 0-100 based on success_count
+    first_success_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_success_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_by_user_id: str
+    last_user_id: str
+    last_example: Optional[Dict] = None  # {email, first_name, last_name}
+    pattern_changed_at: Optional[datetime] = None
