@@ -62,7 +62,9 @@ class EmailFinder:
         return score
     
     async def generate_email_variants_with_cache(self, first_name: str, last_name: str, domain: str, patterns: Optional[List[str]] = None) -> List[str]:
-        """Generate email variants with persistent domain cache lookup"""
+        """Generate email variants with persistent domain cache lookup
+        CRITICAL: first.last@domain is ALWAYS tested FIRST, before any cached pattern
+        """
         first = first_name.lower().strip()
         last = last_name.lower().strip()
         f = first[0] if first else ''
@@ -90,40 +92,39 @@ class EmailFinder:
             cached_pattern = self.domain_patterns[domain]
             logger.info(f"✅ Found IN-MEMORY cached pattern for {domain}: {cached_pattern}")
         
-        # If we have a cached pattern, put it first, then all others in order
-        if cached_pattern and cached_pattern in use_patterns:
-            # Add cached pattern first
+        # CRITICAL: ALWAYS add first.last@domain as #1 priority (unless it's the cached pattern)
+        first_last_pattern = '{first}.{last}@{domain}'
+        if first_last_pattern != cached_pattern:
             try:
-                email = cached_pattern.format(first=first, last=last, f=f, l=l, domain=domain)
+                email = first_last_pattern.format(first=first, last=last, f=f, l=l, domain=domain)
                 emails.append(email)
-                logger.info(f"📌 Priority #1: {email} (cached pattern)")
+                logger.info(f"⭐ Priority #1: {email} (first.last pattern - ALWAYS FIRST)")
             except KeyError:
                 pass
-            
-            # Then add all other patterns in their original order
-            for idx, pattern in enumerate(use_patterns):
-                if pattern != cached_pattern:  # Skip the cached one we already added
-                    try:
-                        email = pattern.format(first=first, last=last, f=f, l=l, domain=domain)
-                        if email not in emails:  # Avoid duplicates
-                            emails.append(email)
-                            if pattern == '{first}.{last}@{domain}':
-                                logger.info(f"⭐ Priority #{len(emails)}: {email} (first.last pattern)")
-                    except KeyError:
-                        continue
-        else:
-            # No cache or cache not in patterns, use standard order
-            # Ensure first.last@domain is ALWAYS first
-            for idx, pattern in enumerate(use_patterns):
+        
+        # If we have a cached pattern, add it as #2 priority (or #1 if it's first.last)
+        if cached_pattern and cached_pattern in use_patterns:
+            try:
+                email = cached_pattern.format(first=first, last=last, f=f, l=l, domain=domain)
+                if email not in emails:  # Avoid duplicates
+                    emails.append(email)
+                    priority_num = len(emails)
+                    logger.info(f"📌 Priority #{priority_num}: {email} (cached pattern)")
+            except KeyError:
+                pass
+        
+        # Then add all other patterns in their original order
+        for idx, pattern in enumerate(use_patterns):
+            if pattern not in [first_last_pattern, cached_pattern]:  # Skip already added patterns
                 try:
                     email = pattern.format(first=first, last=last, f=f, l=l, domain=domain)
-                    emails.append(email)
-                    if idx == 0 and pattern == '{first}.{last}@{domain}':
-                        logger.info(f"⭐ Priority #1: {email} (first.last pattern - DEFAULT)")
+                    if email not in emails:  # Avoid duplicates
+                        emails.append(email)
                 except KeyError:
                     continue
         
         logger.info(f"📋 Generated {len(emails)} email variants, testing in order")
+        logger.info(f"🔢 Pattern order: {emails[:3]}...")  # Show first 3 for verification
         return emails
     
     
