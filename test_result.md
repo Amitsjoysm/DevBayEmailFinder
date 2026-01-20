@@ -460,11 +460,11 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Deliverability Scoring System - Test score calculation for all statuses (valid, invalid, risky, unknown)"
-    - "Production-Ready CSV Error Handling - Test with large files (5K records), malformed CSVs, empty files, invalid formats"
-    - "Deliverability Score UI Display - Verify scores shown correctly in Verifier and Finder results"
-    - "CSV Export with Scores - Verify deliverability_score included in CSV/JSON exports"
-    - "Large File Processing - Test with 5000 record CSV to verify chunking and error handling"
+    - "Domain Pattern Caching - Test with first.last@domain.com pattern priority"
+    - "Domain Pattern Caching - Test persistent cache save/retrieve"
+    - "Domain Pattern Caching - Test cache endpoints (stats, search, lookup)"
+    - "Domain Pattern Caching - Test bulk finder with domain caching"
+    - "Domain Pattern Caching - Test cache persistence after server restart"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
