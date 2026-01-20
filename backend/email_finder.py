@@ -70,11 +70,14 @@ class EmailFinder:
         use_patterns = patterns if patterns else EMAIL_PATTERNS
         emails = []
         
+        logger.info(f"🔍 Generating email variants for {first_name} {last_name} @ {domain}")
+        
         # CRITICAL FIX: Always check patterns in order, prioritizing cached pattern
         # but never excluding other patterns to ensure first.last@domain is checked before first@domain
         cached_pattern = None
         if domain in self.domain_patterns:
             cached_pattern = self.domain_patterns[domain]
+            logger.info(f"✅ Found cached pattern for {domain}: {cached_pattern}")
         
         # If we have a cached pattern, put it first, then all others in order
         if cached_pattern and cached_pattern in use_patterns:
@@ -82,27 +85,34 @@ class EmailFinder:
             try:
                 email = cached_pattern.format(first=first, last=last, f=f, l=l, domain=domain)
                 emails.append(email)
+                logger.info(f"📌 Priority #1: {email} (cached pattern)")
             except KeyError:
                 pass
             
             # Then add all other patterns in their original order
-            for pattern in use_patterns:
+            for idx, pattern in enumerate(use_patterns):
                 if pattern != cached_pattern:  # Skip the cached one we already added
                     try:
                         email = pattern.format(first=first, last=last, f=f, l=l, domain=domain)
                         if email not in emails:  # Avoid duplicates
                             emails.append(email)
+                            if pattern == '{first}.{last}@{domain}':
+                                logger.info(f"⭐ Priority #{len(emails)}: {email} (first.last pattern)")
                     except KeyError:
                         continue
         else:
             # No cache or cache not in patterns, use standard order
-            for pattern in use_patterns:
+            # Ensure first.last@domain is ALWAYS first
+            for idx, pattern in enumerate(use_patterns):
                 try:
                     email = pattern.format(first=first, last=last, f=f, l=l, domain=domain)
                     emails.append(email)
+                    if idx == 0 and pattern == '{first}.{last}@{domain}':
+                        logger.info(f"⭐ Priority #1: {email} (first.last pattern - DEFAULT)")
                 except KeyError:
                     continue
         
+        logger.info(f"📋 Generated {len(emails)} email variants, testing in order")
         return emails
     
     async def find_email(self, first_name: str, last_name: str, domain: str, 
