@@ -820,13 +820,39 @@ async def export_results(
         # Create CSV
         output = io.StringIO()
         if results:
-            # Collect ALL unique fieldnames from ALL results
-            all_fieldnames = set()
-            for result in results:
-                all_fieldnames.update(result.keys())
+            # Sort results by row_index to maintain input file order
+            results = sorted(results, key=lambda x: x.get('row_index', 0))
             
-            # Sort fieldnames for consistent output (optional but nice)
-            fieldnames = sorted(all_fieldnames)
+            # Define fixed column order for consistent exports
+            if job_type == 'finder':
+                # Finder result columns in logical order
+                fieldnames = [
+                    'row_index', 'first_name', 'last_name', 'domain', 'found', 'email',
+                    'status', 'provider', 'deliverability_score', 'patterns_tested',
+                    'search_time', 'verified_at', 'error_message', 'id', 'job_id', 'user_id'
+                ]
+            else:
+                # Verification result columns in logical order
+                fieldnames = [
+                    'row_index', 'email', 'status', 'provider', 'deliverability_score',
+                    'is_catch_all', 'is_role_based', 'is_disposable', 'response_time',
+                    'retry_count', 'mx_records', 'smtp_response', 'verified_at',
+                    'error_message', 'id', 'job_id', 'user_id', 'first_name', 'last_name',
+                    'company', 'max_retry_attempts', 'last_retry_at', 'patterns_tested', 'from_cache'
+                ]
+            
+            # Only include fields that actually exist in the results
+            # (handles both old and new schema gracefully)
+            all_result_keys = set()
+            for result in results:
+                all_result_keys.update(result.keys())
+            
+            # Filter fieldnames to only include columns that exist in results
+            fieldnames = [f for f in fieldnames if f in all_result_keys]
+            
+            # Add any additional fields not in predefined list (future-proofing)
+            additional_fields = sorted(all_result_keys - set(fieldnames))
+            fieldnames.extend(additional_fields)
             
             # Serialize enum values and other non-string types to strings
             serialized_results = []
