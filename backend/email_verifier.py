@@ -271,55 +271,52 @@ class EmailVerifier:
             return VerificationStatus.UNKNOWN, error_msg, False, should_retry
 
     async def verify_smtp(self, email: str, mx_host: str, timeout: int = 10, proxy: dict = None) -> Tuple[VerificationStatus, str, bool]:
-        """Verify email via SMTP handshake"""
-        try:
-            # Connect to SMTP server
-            server = smtplib.SMTP(timeout=timeout)
-            server.connect(mx_host, 25)
-            server.helo('verifymail.com')
-            server.mail('verify@verifymail.com')
-            code, message = server.rcpt(email)
-            server.quit()
-            
-            message_str = message.decode() if isinstance(message, bytes) else str(message)
-            
-            # Check for catch-all
-            is_catch_all = False
-            if code == 250:
-                # Test with random email
-                try:
-                    server2 = smtplib.SMTP(timeout=timeout)
-                    server2.connect(mx_host, 25)
-                    server2.helo('verifymail.com')
-                    server2.mail('verify@verifymail.com')
-                    code2, _ = server2.rcpt(f'nonexistent{int(time.time())}@{email.split("@")[1]}')
-                    server2.quit()
-                    if code2 == 250:
-                        is_catch_all = True
-                except Exception as e:
-                    # If random check fails, not a catch-all
-                    pass
-            
-            if code == 250:
-                status = VerificationStatus.RISKY if is_catch_all else VerificationStatus.VALID
-                return status, message_str, is_catch_all
-            elif code >= 500:
-                return VerificationStatus.INVALID, message_str, False
-            else:
-                return VerificationStatus.UNKNOWN, message_str, False
+        """
+        Verify email via SMTP handshake with automatic sender fallback.
+        Tries multiple sender addresses if sender is rejected.
+        """
+        sender_configs = self.get_sender_configs()
+        last_error = "No sender configurations available"
+        
+        for idx, (sender_email, sender_domain) in enumerate(sender_configs):
+            try:
+                status, message, is_catch_all, should_retry = await self.verify_smtp_with_sender(
+                    email, mx_host, sender_email, sender_domain, timeout
+                )
                 
-        except socket.timeout:
-            return VerificationStatus.UNKNOWN, "SMTP timeout", False
-        except smtplib.SMTPServerDisconnected:
-            return VerificationStatus.UNKNOWN, "Server disconnected", False
-        except smtplib.SMTPResponseException as e:
-            if e.smtp_code >= 500:
-                return VerificationStatus.INVALID, str(e), False
-            return VerificationStatus.UNKNOWN, str(e), False
-        except ConnectionRefusedError:
-            return VerificationStatus.BLOCKED, "Connection refused - IP may be blocked", False
-        except Exception as e:
-            return VerificationStatus.UNKNOWN, f"SMTP Error: {str(e)}", False
+                # If verification succeeded or got definitive result, return it
+                if status in [VerificationStatus.VALID, VerificationStatus.RISKY]:
+                    # Add note about which sender worked
+                    if idx > 0:  # Not the primary sender
+                        message = f"✅ Verified using {sender_email}: {message}"
+                    return status, message, is_catch_all
+                
+                # If it's INVALID but NOT sender-related, return it (definitive result)
+                if status == VerificationStatus.INVALID and not should_retry:
+                    return status, message, is_catch_all
+                
+                # If we got sender rejection error, try next sender
+                if should_retry and idx < len(sender_configs) - 1:
+                    last_error = f"❌ Sender {sender_email} rejected: {message}. Trying next sender..."
+                    print(f"[SMTP Fallback] {last_error}")
+                    continue
+                else:
+                    # Last sender or no retry needed
+                    last_error = message
+                    if status != VerificationStatus.VALID:
+                        return status, message, is_catch_all
+                    
+            except Exception as e:
+                last_error = f"Error with sender {sender_email}: {str(e)}"
+                print(f"[SMTP Fallback] {last_error}")
+                # Try next sender
+                if idx < len(sender_configs) - 1:
+                    continue
+                else:
+                    return VerificationStatus.UNKNOWN, last_error, False
+        
+        # If all senders failed
+        return VerificationStatus.UNKNOWN, f"All sender addresses failed. Last error: {last_error}", False
     
     async def verify_external_api(self, email: str) -> Tuple[VerificationStatus, str]:
         """Fallback verification using external API"""
