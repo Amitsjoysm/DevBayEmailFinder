@@ -621,6 +621,71 @@ test_plan:
         - Results now appear in same order as input CSV file
         - Backward compatible with existing results (row_index defaults to 0)"
 
+  - task: "SMTP Sender Fallback & Error Handling Enhancement"
+    implemented: true
+    working: true
+    file: "email_verifier.py, backend/.env"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "🚀 CRITICAL SMTP ENHANCEMENT IMPLEMENTED:
+        
+        Problem: Email verification failing with sender rejection errors:
+        - '5.4.1 Recipient address rejected: Access denied' (Outlook/O365)
+        - '5.7.1 Sender address rejected: Domain MX misconfigured' (verifymail.com)
+        
+        Solution: Multi-sender fallback system with intelligent retry logic
+        
+        ✅ Redis Server Installed and Running (v7.0.15 on localhost:6379)
+        
+        ✅ Environment Configuration (.env):
+        - PRIMARY_SENDER_EMAIL: amits.joys@gmail.com (Priority 1)
+        - PRIMARY_SENDER_DOMAIN: gmail.com
+        - FALLBACK_SENDER_EMAIL: amit@marketjoy.com (Priority 2)
+        - FALLBACK_SENDER_DOMAIN: marketjoy.com
+        - LEGACY_SENDER_EMAIL: verify@verifymail.com (Priority 3)
+        - LEGACY_SENDER_DOMAIN: verifymail.com
+        
+        ✅ Code Enhancements (email_verifier.py):
+        - Added get_sender_configs() method: Returns sender addresses in priority order
+        - Added is_sender_rejected_error() method: Detects sender rejection errors (5.4.1, 5.7.1, etc.)
+        - Added verify_smtp_with_sender() method: SMTP verification with specific sender
+        - Enhanced verify_smtp() method: Automatic fallback through sender list
+        
+        ✅ Intelligent Error Handling:
+        - Detects sender-related rejections: '5.4.1', '5.7.1', 'access denied', 'sender address rejected', etc.
+        - Automatically tries next sender on rejection
+        - Returns definitive results (VALID/INVALID) immediately when found
+        - Only retries on sender-related errors (not on recipient invalid errors)
+        - Provides clear logging of fallback attempts
+        
+        ✅ Testing Results:
+        - amits.joys@gmail.com (Gmail): VALID, score 100 ✅
+        - test@outlook.com (O365): VALID, score 100 ✅
+        - amit@marketjoy.com: Correctly identified as blocked by Spamhaus ✅
+        - Invalid domains: Correctly identified as INVALID ✅
+        
+        Benefits:
+        - 🎯 Higher success rate for email verification
+        - 🔄 Automatic fallback prevents false negatives
+        - 📊 Better handling of provider-specific restrictions
+        - 💡 Configurable sender addresses via environment variables
+        - 🛡️ Intelligent error detection and retry logic
+        
+        Files Modified:
+        - backend/.env: Added sender configuration
+        - backend/email_verifier.py: Multi-sender fallback implementation
+        
+        System Status:
+        ✅ Backend running with hot reload
+        ✅ Frontend running
+        ✅ MongoDB connected
+        ✅ Redis running (localhost:6379)
+        ✅ All services healthy"
+
 agent_communication:
   - agent: "main"
     message: "Initial codebase analysis complete. Identified 3 critical missing features: 1) Bulk Email Finder, 2) Retry Mechanism, 3) Better error handling. Services are running. Ready to implement after user confirmation."
