@@ -167,6 +167,109 @@ class EmailVerifier:
         else:
             return EmailProvider.CUSTOM
     
+    def get_sender_configs(self) -> List[Tuple[str, str]]:
+        """
+        Get sender email configurations in priority order.
+        Returns list of tuples: [(sender_email, sender_domain), ...]
+        """
+        configs = []
+        
+        # Priority 1: Gmail sender
+        primary_email = os.getenv('PRIMARY_SENDER_EMAIL', 'amits.joys@gmail.com')
+        primary_domain = os.getenv('PRIMARY_SENDER_DOMAIN', 'gmail.com')
+        configs.append((primary_email, primary_domain))
+        
+        # Priority 2: MarketJoy sender
+        fallback_email = os.getenv('FALLBACK_SENDER_EMAIL', 'amit@marketjoy.com')
+        fallback_domain = os.getenv('FALLBACK_SENDER_DOMAIN', 'marketjoy.com')
+        configs.append((fallback_email, fallback_domain))
+        
+        # Priority 3: Legacy sender (if both above fail)
+        legacy_email = os.getenv('LEGACY_SENDER_EMAIL', 'verify@verifymail.com')
+        legacy_domain = os.getenv('LEGACY_SENDER_DOMAIN', 'verifymail.com')
+        configs.append((legacy_email, legacy_domain))
+        
+        return configs
+
+    def is_sender_rejected_error(self, error_message: str) -> bool:
+        """
+        Check if error is related to sender being rejected.
+        Handles: 5.4.1, 5.7.1, and other sender rejection errors
+        """
+        error_lower = error_message.lower()
+        rejection_indicators = [
+            '5.4.1',  # Recipient address rejected: Access denied
+            '5.7.1',  # Sender address rejected
+            'sender address rejected',
+            'domain mx misconfigured',
+            'access denied',
+            'sender not authenticated',
+            'relay access denied',
+            'authentication required'
+        ]
+        return any(indicator in error_lower for indicator in rejection_indicators)
+
+    async def verify_smtp_with_sender(self, email: str, mx_host: str, sender_email: str, sender_domain: str, timeout: int = 10) -> Tuple[VerificationStatus, str, bool, bool]:
+        """
+        Verify email via SMTP handshake with specific sender.
+        Returns: (status, message, is_catch_all, should_retry_with_different_sender)
+        """
+        try:
+            # Connect to SMTP server
+            server = smtplib.SMTP(timeout=timeout)
+            server.connect(mx_host, 25)
+            server.helo(sender_domain)
+            server.mail(sender_email)
+            code, message = server.rcpt(email)
+            server.quit()
+            
+            message_str = message.decode() if isinstance(message, bytes) else str(message)
+            
+            # Check for catch-all
+            is_catch_all = False
+            if code == 250:
+                # Test with random email
+                try:
+                    server2 = smtplib.SMTP(timeout=timeout)
+                    server2.connect(mx_host, 25)
+                    server2.helo(sender_domain)
+                    server2.mail(sender_email)
+                    code2, _ = server2.rcpt(f'nonexistent{int(time.time())}@{email.split("@")[1]}')
+                    server2.quit()
+                    if code2 == 250:
+                        is_catch_all = True
+                except Exception:
+                    # If random check fails, not a catch-all
+                    pass
+            
+            if code == 250:
+                status = VerificationStatus.RISKY if is_catch_all else VerificationStatus.VALID
+                return status, message_str, is_catch_all, False
+            elif code >= 500:
+                return VerificationStatus.INVALID, message_str, False, False
+            else:
+                return VerificationStatus.UNKNOWN, message_str, False, False
+                
+        except smtplib.SMTPResponseException as e:
+            error_msg = str(e)
+            # Check if error is sender-related and we should try different sender
+            should_retry = self.is_sender_rejected_error(error_msg)
+            
+            if e.smtp_code >= 500:
+                return VerificationStatus.INVALID, error_msg, False, should_retry
+            return VerificationStatus.UNKNOWN, error_msg, False, should_retry
+            
+        except socket.timeout:
+            return VerificationStatus.UNKNOWN, "SMTP timeout", False, False
+        except smtplib.SMTPServerDisconnected:
+            return VerificationStatus.UNKNOWN, "Server disconnected", False, False
+        except ConnectionRefusedError:
+            return VerificationStatus.BLOCKED, "Connection refused - IP may be blocked", False, False
+        except Exception as e:
+            error_msg = f"SMTP Error: {str(e)}"
+            should_retry = self.is_sender_rejected_error(error_msg)
+            return VerificationStatus.UNKNOWN, error_msg, False, should_retry
+
     async def verify_smtp(self, email: str, mx_host: str, timeout: int = 10, proxy: dict = None) -> Tuple[VerificationStatus, str, bool]:
         """Verify email via SMTP handshake"""
         try:
