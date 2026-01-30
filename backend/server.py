@@ -1282,8 +1282,19 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_db():
     """Initialize database indexes and recover jobs on startup"""
+    logger.info("🚀 Starting application initialization...")
+    
+    # Initialize ledger with fixed compound unique index
+    logger.info("📋 Initializing ledger service...")
     await ledger_service.initialize()
+    
+    # Initialize domain cache
+    logger.info("🔍 Initializing domain cache service...")
     await domain_cache_service.initialize()
+    
+    # Check data retention health
+    logger.info("🛡️  Checking data retention health...")
+    await data_retention_service.create_data_retention_indexes()
     
     # Recover active jobs from Redis (Phase 1 - Critical for preventing job loss)
     if redis_service and redis_service.is_healthy():
