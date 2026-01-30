@@ -1282,6 +1282,59 @@ async def health_check():
     
     return health_status
 
+@api_router.get("/data-persistence/check")
+async def check_data_persistence(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Check data persistence for current user
+    - Shows recent jobs and their status
+    - Helps debug data disappearance issues
+    """
+    try:
+        # Get user's recent jobs
+        recent_jobs = await db.verification_jobs.find(
+            {"user_id": current_user['id']},
+            {"_id": 0, "id": 1, "job_type": 1, "status": 1, "created_at": 1, "total_records": 1}
+        ).sort("created_at", -1).limit(10).to_list(10)
+        
+        # Get oldest and newest job timestamps
+        oldest_job = await db.verification_jobs.find_one(
+            {"user_id": current_user['id']},
+            {"_id": 0, "created_at": 1}
+        , sort=[("created_at", 1)])
+        
+        newest_job = await db.verification_jobs.find_one(
+            {"user_id": current_user['id']},
+            {"_id": 0, "created_at": 1}
+        , sort=[("created_at", -1)])
+        
+        # Count all user data
+        total_jobs = await db.verification_jobs.count_documents({"user_id": current_user['id']})
+        total_results = await db.verification_results.count_documents({"user_id": current_user['id']})
+        total_finder = await db.finder_results.count_documents({"user_id": current_user['id']})
+        total_ledger = await db.email_ledger.count_documents({"user_id": current_user['id']})
+        
+        return {
+            "user_id": current_user['id'],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data_summary": {
+                "total_jobs": total_jobs,
+                "total_verification_results": total_results,
+                "total_finder_results": total_finder,
+                "total_ledger_entries": total_ledger
+            },
+            "job_history": {
+                "oldest_job_date": oldest_job.get('created_at') if oldest_job else None,
+                "newest_job_date": newest_job.get('created_at') if newest_job else None,
+                "recent_jobs": recent_jobs
+            },
+            "persistence_status": "healthy" if total_jobs > 0 else "no_data"
+        }
+    except Exception as e:
+        logger.error(f"Failed to check data persistence: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/redis/stats")
 async def get_redis_stats(
     current_user: dict = Depends(get_current_user)
