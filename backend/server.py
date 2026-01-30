@@ -1224,9 +1224,22 @@ async def health_check():
     # Check MongoDB
     try:
         await db.command('ping')
+        
+        # Get data counts to verify persistence
+        jobs_count = await db.verification_jobs.count_documents({})
+        results_count = await db.verification_results.count_documents({})
+        finder_count = await db.finder_results.count_documents({})
+        ledger_count = await db.email_ledger.count_documents({})
+        
         health_status['services']['mongodb'] = {
             'status': 'healthy',
-            'connection': 'active'
+            'connection': 'active',
+            'data_counts': {
+                'jobs': jobs_count,
+                'verification_results': results_count,
+                'finder_results': finder_count,
+                'ledger_entries': ledger_count
+            }
         }
     except Exception as e:
         health_status['services']['mongodb'] = {
