@@ -92,6 +92,7 @@ domain_cache_service = DomainCacheService(db)
 finder = EmailFinder(domain_cache_service=domain_cache_service)
 queue_manager = VerificationQueue(db, sio, redis_service)
 ledger_service = LedgerService(db)
+data_retention_service = DataRetentionService(db)
 
 # Socket.IO events
 @sio.event
