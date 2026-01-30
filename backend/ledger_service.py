@@ -15,12 +15,28 @@ class LedgerService:
     async def initialize(self):
         """Create indexes for efficient lookups"""
         try:
-            # Create unique index on email
-            await self.collection.create_index("email", unique=True)
+            # Drop existing indexes to recreate with correct schema
+            try:
+                await self.collection.drop_index("email_1")
+                logger.info("Dropped old email index")
+            except Exception:
+                pass  # Index might not exist
+            
+            # 🔥 CRITICAL FIX: Create compound unique index on (email, user_id)
+            # This allows multiple users to have their own ledger entries for the same email
+            await self.collection.create_index(
+                [("email", 1), ("user_id", 1)],
+                unique=True,
+                name="email_user_unique"
+            )
+            logger.info("✅ Created compound unique index on (email, user_id)")
+            
             # Create index on user_id for filtering
             await self.collection.create_index("user_id")
+            
             # Create index on last_verified_at for sorting
             await self.collection.create_index("last_verified_at")
+            
             logger.info("Email ledger indexes created successfully")
         except Exception as e:
             logger.error(f"Failed to create ledger indexes: {e}")
@@ -37,6 +53,7 @@ class LedgerService:
             )
             
             if not entry:
+                logger.info(f"Ledger miss for {email} (user: {user_id})")
                 return None
             
             # Check if entry is fresh (less than 30 days old)
@@ -48,10 +65,10 @@ class LedgerService:
             
             # Return cached result if less than 30 days old
             if age_days < 30:
-                logger.info(f"Ledger hit for {email} (age: {age_days} days)")
+                logger.info(f"✅ Ledger hit for {email} (age: {age_days} days, user: {user_id})")
                 return entry
             else:
-                logger.info(f"Ledger entry for {email} is stale ({age_days} days), will re-verify")
+                logger.info(f"⏰ Ledger entry for {email} is stale ({age_days} days), will re-verify")
                 return None
                 
         except Exception as e:
@@ -66,7 +83,7 @@ class LedgerService:
             email_lower = email.lower()
             now = datetime.now(timezone.utc)
             
-            # Check if entry exists
+            # Check if entry exists for this user
             existing = await self.collection.find_one({"email": email_lower, "user_id": user_id})
             
             ledger_data = {
@@ -102,7 +119,7 @@ class LedgerService:
                     {"email": email_lower, "user_id": user_id},
                     {"$set": ledger_data}
                 )
-                logger.info(f"Updated ledger entry for {email}")
+                logger.info(f"📝 Updated ledger entry for {email} (user: {user_id}, count: {ledger_data['verification_count']})")
             else:
                 # Create new entry
                 ledger_data.update({
@@ -110,7 +127,7 @@ class LedgerService:
                     "verification_count": 1,
                 })
                 await self.collection.insert_one(ledger_data)
-                logger.info(f"Created ledger entry for {email}")
+                logger.info(f"✨ Created ledger entry for {email} (user: {user_id})")
             
             return True
         except Exception as e:
@@ -118,7 +135,7 @@ class LedgerService:
             return False
     
     async def get_ledger_stats(self, user_id: str) -> Dict:
-        """Get statistics from ledger"""
+        """Get statistics from ledger for specific user"""
         try:
             pipeline = [
                 {"$match": {"user_id": user_id}},
@@ -168,7 +185,7 @@ class LedgerService:
             return {}
     
     async def search_ledger(self, user_id: str, query: str = None, status: str = None, limit: int = 100, skip: int = 0) -> list:
-        """Search ledger entries"""
+        """Search ledger entries for specific user"""
         try:
             filter_query = {"user_id": user_id}
             
@@ -183,7 +200,17 @@ class LedgerService:
                 {"_id": 0}
             ).sort("last_verified_at", -1).skip(skip).limit(limit).to_list(None)
             
+            logger.info(f"📊 Ledger search for user {user_id}: {len(results)} results (query: {query}, status: {status})")
             return results
         except Exception as e:
             logger.error(f"Failed to search ledger: {e}")
             return []
+    
+    async def get_ledger_count(self, user_id: str) -> int:
+        """Get total count of ledger entries for a user"""
+        try:
+            count = await self.collection.count_documents({"user_id": user_id})
+            return count
+        except Exception as e:
+            logger.error(f"Failed to get ledger count: {e}")
+            return 0
