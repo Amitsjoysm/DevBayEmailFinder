@@ -1337,6 +1337,27 @@ async def startup_db():
     """Initialize database indexes and recover jobs on startup"""
     logger.info("🚀 Starting application initialization...")
     
+    # Create essential indexes for data persistence
+    logger.info("📊 Creating database indexes...")
+    try:
+        # Jobs collection indexes
+        await db.verification_jobs.create_index([("user_id", 1), ("created_at", -1)])
+        await db.verification_jobs.create_index([("id", 1), ("user_id", 1)], unique=True)
+        logger.info("✅ Verification jobs indexes created")
+        
+        # Results collection indexes
+        await db.verification_results.create_index([("job_id", 1), ("user_id", 1)])
+        await db.verification_results.create_index([("user_id", 1), ("verified_at", -1)])
+        logger.info("✅ Verification results indexes created")
+        
+        # Finder results indexes
+        await db.finder_results.create_index([("job_id", 1), ("user_id", 1)])
+        await db.finder_results.create_index([("user_id", 1), ("verified_at", -1)])
+        logger.info("✅ Finder results indexes created")
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Index creation warning (may already exist): {e}")
+    
     # Initialize ledger with fixed compound unique index
     logger.info("📋 Initializing ledger service...")
     await ledger_service.initialize()
@@ -1348,6 +1369,16 @@ async def startup_db():
     # Check data retention health
     logger.info("🛡️  Checking data retention health...")
     await data_retention_service.create_data_retention_indexes()
+    
+    # Log current data counts
+    try:
+        jobs_count = await db.verification_jobs.count_documents({})
+        results_count = await db.verification_results.count_documents({})
+        finder_count = await db.finder_results.count_documents({})
+        ledger_count = await db.email_ledger.count_documents({})
+        logger.info(f"📈 Current data: {jobs_count} jobs, {results_count} verification results, {finder_count} finder results, {ledger_count} ledger entries")
+    except Exception as e:
+        logger.warning(f"Could not get data counts: {e}")
     
     # Recover active jobs from Redis (Phase 1 - Critical for preventing job loss)
     if redis_service and redis_service.is_healthy():
