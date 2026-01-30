@@ -1059,6 +1059,48 @@ async def get_ledger_entry(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# Data Retention & Health Monitoring Endpoints
+# ============================================================================
+
+@api_router.get("/data-health")
+async def get_data_health(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get comprehensive data health report for current user"""
+    try:
+        report = await data_retention_service.get_data_health_report(current_user['id'])
+        return report
+    except Exception as e:
+        logger.error(f"Failed to get data health report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/data-health/recent-activity")
+async def get_recent_activity(
+    hours: int = 24,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get recent activity to verify data is being saved"""
+    try:
+        activity = await data_retention_service.get_recent_activity(current_user['id'], hours)
+        return activity
+    except Exception as e:
+        logger.error(f"Failed to get recent activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/ledger/count")
+async def get_ledger_count(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get total count of ledger entries for current user"""
+    try:
+        count = await ledger_service.get_ledger_count(current_user['id'])
+        return {"count": count, "user_id": current_user['id']}
+    except Exception as e:
+        logger.error(f"Failed to get ledger count: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 # ============================================================================
 # Domain Pattern Cache Endpoints
