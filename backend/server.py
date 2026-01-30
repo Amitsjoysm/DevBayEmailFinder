@@ -31,6 +31,7 @@ from queue_manager import VerificationQueue
 from ledger_service import LedgerService
 from domain_cache_service import DomainCacheService
 from redis_service import init_redis_service, get_redis_service
+from data_retention_service import DataRetentionService
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
