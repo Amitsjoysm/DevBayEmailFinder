@@ -632,12 +632,23 @@ async def upload_finder_csv(
 # Job management endpoints
 @api_router.get("/jobs")
 async def get_jobs(
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    limit: int = 100
 ):
+    """
+    Get user's job history
+    - Returns most recent jobs (default: 100, max: 500)
+    - Sorted by creation date (newest first)
+    """
+    # Limit max to prevent performance issues
+    limit = min(limit, 500)
+    
     jobs = await db.verification_jobs.find(
         {"user_id": current_user['id']},
         {"_id": 0}
-    ).sort("created_at", -1).limit(50).to_list(50)
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    logger.info(f"Retrieved {len(jobs)} jobs for user {current_user['id'][:8]}")
     
     return jobs
 
