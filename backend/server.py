@@ -597,7 +597,9 @@ async def upload_finder_csv(
         job_dict = job.model_dump()
         job_dict['created_at'] = job_dict['created_at'].isoformat()
         
+        # Save to MongoDB with logging
         await db.verification_jobs.insert_one(job_dict)
+        logger.info(f"✅ Created finder job {job.id[:8]} for user {current_user['id'][:8]} with {len(records)} records")
         
         # Start processing in background
         background_tasks.add_task(
